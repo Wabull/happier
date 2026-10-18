@@ -600,6 +600,14 @@ export function useMachineCapabilitiesCache(params: {
             return unsubscribe;
         }
 
+        // A first detect for this machine is still in flight with no snapshot yet. It may be a
+        // different request, and its completion does not rerun this effect, so queue ours now.
+        // fetchAndMerge dedupes an identical in-flight request and serializes a different one.
+        if (entry?.state.status === 'loading' && !entry.state.snapshot) {
+            refresh();
+            return unsubscribe;
+        }
+
         const now = Date.now();
         const shouldFetch = shouldRefetchEntry({ entry: entry ?? null, staleMs, nowMs: now });
         if (shouldFetch) {

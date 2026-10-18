@@ -230,6 +230,68 @@ describe('useMachineCapabilitiesCache (hook)', () => {
         }));
     });
 
+    it('fetches its own capability when it mounts while a different first request is still loading', async () => {
+        vi.resetModules();
+
+        let resolveFirst!: (value: unknown) => void;
+        const machineCapabilitiesDetect = vi.fn()
+            .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+            .mockResolvedValueOnce({
+                supported: true,
+                response: {
+                    protocolVersion: 1,
+                    results: {
+                        'tool.executionRuns': { ok: true, data: { backends: { claude: { available: true, intents: ['discussion'] } } } },
+                    },
+                },
+            });
+
+        vi.doMock('@/sync/ops', () => ({
+            machineCapabilitiesDetect,
+        }));
+
+        const { prefetchMachineCapabilities, useMachineCapabilitiesCache } = await import('./useMachineCapabilitiesCache');
+
+        // Another surface starts the first detect for this machine (e.g. CLI checks on a direct page load).
+        const first = prefetchMachineCapabilities({
+            machineId: 'm1',
+            request: { requests: [{ id: 'cli.claude' }] as any },
+            timeoutMs: 1,
+        });
+        await flushHookEffects();
+
+        let latestState: { status: string; snapshot?: { response: { results: Record<string, unknown> } } } | null = null;
+        function Test() {
+            latestState = useMachineCapabilitiesCache({
+                machineId: 'm1',
+                enabled: true,
+                request: { requests: [{ id: 'tool.executionRuns' }] as any },
+                timeoutMs: 1,
+            }).state;
+            return React.createElement('View');
+        }
+
+        await renderScreen(React.createElement(Test));
+        await flushHookEffects();
+
+        resolveFirst({
+            supported: true,
+            response: { protocolVersion: 1, results: { 'cli.claude': { ok: true, data: { available: true } } } },
+        });
+        await first;
+        await flushHookEffects();
+        await flushHookEffects();
+
+        expect(machineCapabilitiesDetect.mock.calls.map((call) => call[1])).toContainEqual({ requests: [{ id: 'tool.executionRuns' }] });
+        expect(latestState).toEqual(expect.objectContaining({
+            snapshot: expect.objectContaining({
+                response: expect.objectContaining({
+                    results: expect.objectContaining({ 'tool.executionRuns': expect.anything() }),
+                }),
+            }),
+        }));
+    });
+
     it('retries error states after a short backoff even when staleMs is large', async () => {
         vi.resetModules();
         process.env.EXPO_PUBLIC_HAPPIER_MACHINE_CAPABILITIES_ERROR_BACKOFF_MS = '1000';
