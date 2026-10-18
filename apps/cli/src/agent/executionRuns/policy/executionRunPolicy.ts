@@ -85,6 +85,9 @@ export function isSafePermissionModeForIntent(intent: ExecutionRunIntent, permis
     raw === 'no_tools' || raw === 'read_only' || raw === 'workspace_write'
       ? raw
       : parsePermissionIntentAlias(raw);
+  if (intent === 'discussion') {
+    return mode === 'no_tools';
+  }
   if (intent === 'review' || intent === 'plan' || intent === 'voice_agent' || intent === 'memory_hints') {
     return mode === 'no_tools' || mode === 'read_only' || mode === 'read-only';
   }

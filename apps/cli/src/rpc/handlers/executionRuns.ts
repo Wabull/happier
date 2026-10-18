@@ -377,6 +377,44 @@ export function registerExecutionRunHandlers(
           }
         }
       }
+      if (parsed.data.intent === 'discussion') {
+        if (parsed.data.ioMode !== 'request_response' || parsed.data.runClass !== 'bounded') {
+          return { ok: false, error: 'Unsupported discussion run shape', errorCode: 'execution_run_not_allowed' };
+        }
+        startParams.notifyParentOnCompletion = false;
+        const credentials = await readCredentials().catch(() => null);
+        if (credentials && ctx.sessionId) {
+          const replaySeed = await resolveReplaySeedDraft({
+            credentials,
+            cwd: resolveCwd(),
+            source: {
+              kind: 'fork_chain',
+              previousSessionId: ctx.sessionId,
+            },
+            strategy: 'recent_messages',
+            recentMessagesCount: null,
+            maxSeedChars: configuration.replaySeedMaxChars,
+            candidateLimit: configuration.replaySeedCandidateLimit,
+            includeDiscussionRunTurns: true,
+          }).catch((): ReplaySeedDraftResolution => ({ status: 'unavailable' }));
+          if (replaySeed.status === 'seeded') {
+            startParams.initialContext = replaySeed.seedDraft;
+            if (replaySeed.historyTruncated) {
+              const prior = startParams.intentInput;
+              startParams.intentInput = {
+                ...(prior && typeof prior === 'object' && !Array.isArray(prior) ? prior as Record<string, unknown> : {}),
+                historyTruncated: true,
+              };
+            }
+          } else if (replaySeed.status === 'unavailable') {
+            const prior = startParams.intentInput;
+            startParams.intentInput = {
+              ...(prior && typeof prior === 'object' && !Array.isArray(prior) ? prior as Record<string, unknown> : {}),
+              historyTruncated: true,
+            };
+          }
+        }
+      }
       delete startParams.replay;
 
       // Preserve passthrough fields for intent-specific configuration (e.g. voice_agent model IDs).
@@ -405,6 +443,13 @@ export function registerExecutionRunHandlers(
       }
       if (code === 'execution_run_start_conflict') {
         return { ok: false, error: 'Execution run start request conflict', errorCode: 'execution_run_start_conflict' };
+      }
+      if (code === 'execution_run_not_allowed') {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Execution run not allowed',
+          errorCode: 'execution_run_not_allowed',
+        };
       }
       if (error instanceof VoiceAgentError) {
         return { ok: false, error: error.message, errorCode: error.code };

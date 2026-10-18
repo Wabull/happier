@@ -10,7 +10,8 @@ import { resolveExecutionRunBackendLabel } from '@/components/sessions/runs/reso
 
 export type ExecutionRunRowRun =
     Pick<ExecutionRunPublicState, 'runId' | 'intent' | 'backendTarget' | 'status' | 'display'>
-    & Partial<Pick<ExecutionRunPublicState, 'startedAtMs' | 'finishedAtMs' | 'runClass' | 'turnInFlight'>>;
+    & Partial<Pick<ExecutionRunPublicState, 'startedAtMs' | 'finishedAtMs' | 'runClass' | 'turnInFlight' | 'requestedConfiguration'>>
+    & Readonly<{ observedModelId?: string | null }>;
 
 export const ExecutionRunRow = React.memo((props: Readonly<{
     run: ExecutionRunRowRun;
@@ -20,8 +21,15 @@ export const ExecutionRunRow = React.memo((props: Readonly<{
 }>) => {
     const { theme } = useUnistyles();
     const { run, onPress } = props;
-    const subtitle = typeof props.subtitle === 'string' ? props.subtitle : run.runId;
+    const requestedModel = run.requestedConfiguration?.modelId?.trim() || null;
+    const observedModel = typeof run.observedModelId === 'string' ? run.observedModelId.trim() : '';
     const backendLabel = resolveExecutionRunBackendLabel(run.backendTarget);
+    const discussionDetail = run.intent === 'discussion'
+        ? [backendLabel, requestedModel, observedModel ? `observed ${observedModel}` : null].filter(Boolean).join(' · ')
+        : '';
+    const subtitle = typeof props.subtitle === 'string'
+        ? props.subtitle
+        : (discussionDetail || run.runId);
     const title =
         (run.display && typeof run.display === 'object' && typeof (run.display as any).title === 'string' && String((run.display as any).title).trim().length > 0)
             ? String((run.display as any).title).trim()

@@ -92,6 +92,45 @@ describe('ClaudeSdkAgentBackend runtime bootstrap', () => {
     }));
   });
 
+  it('denies a Read attempt through the Claude tool callback for no_tools', async () => {
+    const { ClaudeSdkAgentBackend } = await import('./ClaudeSdkAgentBackend');
+    const backend = new ClaudeSdkAgentBackend({
+      cwd: '/tmp',
+      modelId: 'default',
+      permissionHandler: noToolsPermissionHandler(),
+      extraArgs: ['--tools', ''],
+    });
+    try {
+      const decision = await (backend as any).buildCanCallTool()('Read', { file_path: 'README.md' }, {
+        signal: new AbortController().signal,
+        toolUseId: 'toolu_read_1',
+      });
+      expect(decision).toMatchObject({ behavior: 'deny', interrupt: true });
+    } finally {
+      await backend.dispose();
+    }
+  });
+
+  it('forwards discussion tool disabling to the Claude query', async () => {
+    const { ClaudeSdkAgentBackend } = await import('./ClaudeSdkAgentBackend');
+    const backend = new ClaudeSdkAgentBackend({
+      cwd: '/tmp',
+      modelId: 'default',
+      permissionHandler: noToolsPermissionHandler(),
+      extraArgs: ['--tools', ''],
+    });
+    try {
+      await backend.startSession();
+    } finally {
+      await backend.dispose();
+    }
+    expect(queryMock).toHaveBeenCalledWith(expect.objectContaining({
+      options: expect.objectContaining({
+        extraArgs: ['--tools', ''],
+      }),
+    }));
+  });
+
   it('prefers query.stopTask(taskId) over query.interrupt() when cancelling a turn with an active task id', async () => {
     const taskStartedProcessed = createDeferred<void>();
     const stopTask = vi.fn(async (_taskId: string) => {});

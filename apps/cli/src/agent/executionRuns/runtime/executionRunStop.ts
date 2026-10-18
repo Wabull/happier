@@ -38,9 +38,13 @@ export async function stopExecutionRun(args: Readonly<{
   });
 
   const finishedAtMs = args.getNowMs();
+  const partialText = ctrl.kind === 'backend' ? ctrl.buffer.trim() : '';
+  const summary = run.intent === 'discussion'
+    ? (partialText ? `Stopped. Partial answer:\n${partialText}` : 'Stopped.')
+    : 'Cancelled';
   const output = {
     status: 'cancelled',
-    summary: 'Cancelled',
+    summary,
     runId: run.runId,
     callId: run.callId,
     sidechainId: run.sidechainId,
@@ -51,7 +55,7 @@ export async function stopExecutionRun(args: Readonly<{
   };
 
   try {
-    await args.finishRun(args.runId, { status: 'cancelled', summary: 'Cancelled', finishedAtMs }, { output });
+    await args.finishRun(args.runId, { status: 'cancelled', summary, finishedAtMs }, { output });
   } finally {
     try {
       await ctrl.terminalMarkerWritePromise;

@@ -8,10 +8,12 @@ import { join } from 'node:path';
 import { resolveClaudeSessionEnvOverlay } from '../spawn/resolveClaudeSessionEnvOverlay';
 
 export const executionRunBackendFactory: ExecutionRunBackendFactory = (opts) => {
+  const disableTools = opts.start?.intent === 'discussion' && opts.permissionMode.trim().toLowerCase() === 'no_tools';
   return new ClaudeSdkAgentBackend({
     cwd: opts.cwd,
     modelId: opts.modelId ?? 'default',
     permissionHandler: opts.permissionHandler,
+    ...(disableTools ? { extraArgs: ['--tools', ''] } : {}),
     settingsPath: opts.isolation?.settingsPath,
     env: {
       ...opts.isolation?.env,

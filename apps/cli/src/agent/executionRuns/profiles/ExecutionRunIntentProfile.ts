@@ -15,6 +15,7 @@ export type ExecutionRunProfileStartParams = Readonly<{
   backendId: string;
   backendTarget: BackendTargetRefV1;
   instructions: string;
+  initialContext?: string;
   intentInput?: unknown;
   permissionMode: string;
   retentionPolicy: ExecutionRunRetentionPolicy;

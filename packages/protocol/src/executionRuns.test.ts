@@ -35,6 +35,7 @@ describe('executionRuns protocol', () => {
     expect(ExecutionRunIntentSchema.parse('review')).toBe('review');
     expect(ExecutionRunIntentSchema.parse('voice_agent')).toBe('voice_agent');
     expect(ExecutionRunIntentSchema.parse('memory_hints')).toBe('memory_hints');
+    expect(ExecutionRunIntentSchema.parse('discussion')).toBe('discussion');
   });
 
   it('validates public state shape', () => {

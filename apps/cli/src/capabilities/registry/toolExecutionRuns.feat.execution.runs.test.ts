@@ -51,10 +51,14 @@ describe('executionRunsCapability', () => {
       request: { id: 'tool.executionRuns' },
     }) as {
       available: boolean;
-      backends: Record<string, { supportsVendorResume?: boolean; available?: boolean }>;
+      intents?: readonly string[];
+      backends: Record<string, { supportsVendorResume?: boolean; available?: boolean; intents?: readonly string[] }>;
     };
 
     expect(res?.available).toBe(true);
+    expect(res?.backends?.claude).toMatchObject({ intents: expect.arrayContaining(['discussion']) });
+    expect(res?.backends?.codex?.intents ?? []).not.toContain('discussion');
+    expect(res?.intents ?? []).not.toContain('discussion');
     expect(res?.backends?.claude).toBeTruthy();
     expect(typeof res.backends.claude.supportsVendorResume).toBe('boolean');
     expect(res.backends.codex).toMatchObject({
@@ -139,7 +143,13 @@ describe('executionRunsCapability', () => {
     expect(Object.keys(res.backends).slice().sort()).toEqual([...Object.keys(AGENTS), 'coderabbit'].sort());
 
     for (const backendId of Object.keys(AGENTS)) {
+      if (backendId === 'claude') {
+        expect(res.backends.claude?.intents).toEqual([...res.intents, 'discussion']);
+        expect(res.intents).not.toContain('discussion');
+        continue;
+      }
       expect(res.backends[backendId]?.intents).toBe(res.intents);
+      expect(res.backends[backendId]?.intents).not.toContain('discussion');
     }
 
     expect(res.backends.coderabbit?.intents).toEqual(['review']);
@@ -164,5 +174,10 @@ describe('executionRunsCapability', () => {
     for (const intent of res.backends.coderabbit?.intents ?? []) {
       expect(ExecutionRunIntentSchema.safeParse(intent).success).toBe(true);
     }
+    for (const intent of res.backends.claude?.intents ?? []) {
+      expect(ExecutionRunIntentSchema.safeParse(intent).success).toBe(true);
+    }
+    expect(res.backends.claude?.intents).toContain('discussion');
+    expect(res.backends.codex?.intents ?? []).not.toContain('discussion');
   });
 });

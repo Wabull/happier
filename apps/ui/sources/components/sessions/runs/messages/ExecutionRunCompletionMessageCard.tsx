@@ -24,6 +24,16 @@ export function ExecutionRunCompletionMessageCard(props: Readonly<{
 }>) {
     const statusLabel = readStatusLabel(props.payload.status);
     const summary = props.payload.summary?.trim() || null;
+    const attribution = props.payload as typeof props.payload & {
+        participantLabel?: string;
+        backendId?: string;
+        requestedModelId?: string;
+        observedModelId?: string;
+    };
+    const attributionText = [attribution.participantLabel, attribution.backendId, attribution.observedModelId ?? attribution.requestedModelId]
+        .map((value) => typeof value === 'string' ? value.trim() : '')
+        .filter(Boolean)
+        .join(' · ');
     const title = t('executionRuns.details.titles.executionRun');
     const runIdLabel = t('executionRuns.details.labels.runId', { value: props.payload.runId });
 
@@ -42,6 +52,7 @@ export function ExecutionRunCompletionMessageCard(props: Readonly<{
                 </View>
             </View>
             <Text selectable style={styles.runId}>{props.payload.runId}</Text>
+            {attributionText ? <Text selectable testID="execution-run-attribution">{attributionText}</Text> : null}
             {summary ? <Text selectable style={styles.summary}>{summary}</Text> : null}
         </View>
     );

@@ -12,6 +12,7 @@ import { resolveProviderSpawnExtrasForRuntime } from '@/settings/providerSetting
 
 const EXECUTION_RUN_INTENTS = ['review', 'plan', 'delegate'] as const;
 const EXECUTION_RUN_VOICE_INTENTS = [...EXECUTION_RUN_INTENTS, 'voice_agent'] as const;
+const DISCUSSION_CAPABLE_BACKENDS = new Set(['claude']);
 const CODERABBIT_INTENTS = ['review'] as const;
 
 function isCliAvailable(context: any, agentId: string): boolean {
@@ -71,6 +72,10 @@ export const executionRunsCapability: Capability = {
     const coderabbitOnPath = coderabbitOverride
       ? true
       : Boolean(await resolveCommandOnPath('coderabbit', mergedPath || null));
+    const intentsForBackend = (backendId: string): readonly string[] => {
+      const base = voiceEnabled ? EXECUTION_RUN_VOICE_INTENTS : EXECUTION_RUN_INTENTS;
+      return DISCUSSION_CAPABLE_BACKENDS.has(backendId) ? [...base, 'discussion'] : base;
+    };
     const intents = voiceEnabled ? EXECUTION_RUN_VOICE_INTENTS : EXECUTION_RUN_INTENTS;
     const catalogBackendIds = Object.keys(AGENTS) as CatalogAgentId[];
 
@@ -106,7 +111,7 @@ export const executionRunsCapability: Capability = {
             backendId,
             {
               available,
-              intents,
+              intents: intentsForBackend(backendId),
               supportsVendorResume: supportsVendorResumeByBackend[backendId] === true,
             },
           ] as const;

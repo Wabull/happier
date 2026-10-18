@@ -65,4 +65,16 @@ describe('claude execution run isolation', () => {
 
     expect((backend as any).opts.permissionHandler).toBe(permissionHandler);
   });
+
+  it('disables Claude tools for a no_tools discussion run', () => {
+    const backend = executionRunBackendFactory({
+      cwd: '/tmp',
+      backendId: 'claude',
+      permissionMode: 'no_tools',
+      permissionHandler: { handleToolCall: async () => ({ decision: 'denied' as const }) },
+      start: { intent: 'discussion' },
+    });
+
+    expect((backend as any).opts.extraArgs).toEqual(['--tools', '']);
+  });
 });

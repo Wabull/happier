@@ -17,6 +17,7 @@ export const ExecutionRunIntentSchema = z.enum([
   'delegate',
   'voice_agent',
   'memory_hints',
+  'discussion',
 ]);
 export type ExecutionRunIntent = z.infer<typeof ExecutionRunIntentSchema>;
 

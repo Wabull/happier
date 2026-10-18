@@ -596,6 +596,17 @@ export class ExecutionRunManager {
   async start(params: ExecutionRunManagerStartParams): Promise<ExecutionRunStartResult> {
     const existing = this.resolveStartRequest(params);
     if (existing) return existing;
+    if (params.intent === 'discussion') {
+      const groupId = params.display?.groupId?.trim() ?? '';
+      for (const run of this.runs.values()) {
+        if (run.intent !== 'discussion' || run.status !== 'running') continue;
+        const runningGroupId = run.display?.groupId?.trim() ?? '';
+        if (groupId && runningGroupId && groupId !== runningGroupId) continue;
+        const error = new Error('A discussion turn is already active');
+        Object.assign(error, { code: 'execution_run_not_allowed' });
+        throw error;
+      }
+    }
     const started = await startExecutionRun({
       params,
       parentProvider: this.parentProvider,

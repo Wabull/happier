@@ -234,6 +234,10 @@ export async function startExecutionRun(args: Readonly<{
       ? { connectedServicesRegistration: args.params.connectedServicesRegistration }
       : {}),
   } as const;
+  const notifyParentOnCompletion = args.params.intent === 'discussion'
+    ? false
+    : args.params.notifyParentOnCompletion
+      ?? (args.params.accountSettings?.executionRunsNotifyParentOnCompletionDefault === true);
   args.runs.set(runId, {
     runId,
     callId,
@@ -252,8 +256,7 @@ export async function startExecutionRun(args: Readonly<{
     retentionPolicy: args.params.retentionPolicy,
     runClass: args.params.runClass,
     ioMode: args.params.ioMode,
-    notifyParentOnCompletion: args.params.notifyParentOnCompletion
-      ?? (args.params.accountSettings?.executionRunsNotifyParentOnCompletionDefault === true),
+    notifyParentOnCompletion,
     ...(Object.keys(launch).length > 0 ? { launch } : {}),
     status: 'running',
     startedAtMs,
@@ -290,10 +293,7 @@ export async function startExecutionRun(args: Readonly<{
     ioMode: args.params.ioMode,
     retentionPolicy: args.params.retentionPolicy,
     status: 'running',
-    ...(args.params.notifyParentOnCompletion
-      ?? (args.params.accountSettings?.executionRunsNotifyParentOnCompletionDefault === true)
-      ? { notifyParentOnCompletion: true }
-      : {}),
+    ...(notifyParentOnCompletion ? { notifyParentOnCompletion: true } : {}),
     startedAtMs,
     updatedAtMs: startedAtMs,
     resumeHandle: null,

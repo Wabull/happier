@@ -18,7 +18,7 @@ where all of that becomes visible in one place.
 
 In one session, you can have:
 
-- **Happier-managed Subagents**: review, plan, and delegate runs started by Happier
+- **Happier-managed Subagents**: review, plan, delegate, and user-paced discussion runs started by Happier
 - **Claude team agents**: Claude teammates created inside a Claude team
 - **Provider-backed agent threads**: monitor-only task/agent sidechains emitted by providers
 
@@ -31,6 +31,14 @@ There are three distinct ways to start more agent work:
 - **Independent Happier sessions** are separate top-level sessions. Creating one is not routine delegation.
 
 Use a Happier-managed run when the user explicitly asks for a Happier-managed run, Happier delegation run, or Happier subagent; asks for another Agent backend, model provider, model, account, or service that the native facility cannot satisfy; or has enabled a custom rule that requires Happier. The presence of a discoverable Happier action does not by itself choose this route.
+
+## Discussion
+
+A discussion is a user-paced conversation inside the current session. You pick two participants, each with a backend, model, and label, then choose who speaks next. Asking A records A's answer on the session transcript. Asking B sends B the question plus A's committed answer. Nothing starts the other participant, and nothing continues after Stop.
+
+Discussion is experimental and uses the same `execution.runs` switch as other Happier-managed runs. An older CLI that does not advertise `discussion` hides the control. Only a text-only adapter is offered. The first advertised adapter is Claude with tools disabled (`no_tools`). Codex and other adapters stay unavailable until they are shown to deny tool use.
+
+Pause stops the active turn, if one is running, and keeps the next ask disabled until you resume. Pause lives on this screen and is cleared by a restart; it is not stored. Restart still restores the participants from the discussion runs already in the transcript, and a retry of the same ask reuses the original request id instead of starting a second run. Stop ends the active turn. If some text was already produced, the run is marked stopped and keeps that partial answer.
 
 ## Plan run vs plan mode
 

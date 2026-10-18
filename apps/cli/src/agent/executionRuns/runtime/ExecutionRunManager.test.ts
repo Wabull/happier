@@ -2327,3 +2327,148 @@ describe('ExecutionRunManager (bounded external send)', () => {
   });
 
 });
+
+describe('discussion turns', () => {
+  function discussionStart(overrides: Record<string, unknown> = {}) {
+    return {
+      sessionId: 'parent_session_1',
+      intent: 'discussion' as const,
+      backendTarget: { kind: 'builtInAgent' as const, agentId: 'claude' },
+      instructions: 'What changed?',
+      permissionMode: 'no_tools',
+      retentionPolicy: 'ephemeral' as const,
+      runClass: 'bounded' as const,
+      ioMode: 'request_response' as const,
+      display: { participantLabel: 'A', groupId: 'discussion-1' },
+      ...overrides,
+    };
+  }
+
+  it('puts A answer into B prompt and does not wake the parent', async () => {
+    const prompts: string[] = [];
+    const acp: Array<{ type?: string; name?: string; callId?: string; input?: unknown; output?: unknown }> = [];
+    const parentInputs: string[] = [];
+    let turn = 0;
+    const manager = new ExecutionRunManager({
+      parentProvider: 'claude',
+      cwd: process.cwd(),
+      enqueueParentSessionInput: async (input) => {
+        parentInputs.push(input.text);
+      },
+      sendAcp: (_provider, body) => {
+        acp.push(body as { type?: string; name?: string; callId?: string; input?: unknown; output?: unknown });
+      },
+      createBackend: () => {
+        turn += 1;
+        const answer = turn === 1 ? 'CANARY-FROM-A' : 'from-b';
+        const backend = createStaticJsonBackend(answer);
+        const originalSend = backend.sendPrompt.bind(backend);
+        backend.sendPrompt = async (sessionId, prompt) => {
+          prompts.push(prompt);
+          await originalSend(sessionId, prompt);
+        };
+        return backend;
+      },
+    });
+
+    const first = await manager.start({
+      ...discussionStart(),
+      accountSettings: { executionRunsNotifyParentOnCompletionDefault: true },
+    });
+    await flushAsyncEffects();
+    await expect.poll(() => prompts.length).toBe(1);
+    await expect.poll(() => manager.get(first.runId)?.status).toBe('succeeded');
+    expect(prompts[0]).toContain('What changed?');
+    expect(parentInputs).toEqual([]);
+
+    const { selectDiscussionTurns } = await import('@/session/replay/selectDiscussionRunTurns');
+    const turns = selectDiscussionTurns(acp);
+    expect(turns).toEqual([
+      expect.objectContaining({ label: 'A', text: 'CANARY-FROM-A' }),
+    ]);
+
+    await manager.start(discussionStart({
+      instructions: 'What do you think of that?',
+      display: { participantLabel: 'B', groupId: 'discussion-1' },
+      initialContext: turns.map((turnItem) => `${turnItem.label}: ${turnItem.text}`).join('\n'),
+    }));
+    await flushAsyncEffects();
+    await expect.poll(() => prompts.length).toBe(2);
+    expect(prompts[1]).toContain('What do you think of that?');
+    expect(prompts[1]).toContain('A: CANARY-FROM-A');
+    expect(parentInputs).toEqual([]);
+    const publics = manager.listPublic();
+    expect(publics.map((run) => run.display?.participantLabel).sort()).toEqual(['A', 'B']);
+    expect(new Set(publics.map((run) => run.display?.groupId))).toEqual(new Set(['discussion-1']));
+  });
+
+  it('rejects a second discussion start while one is active and replays the same start request', async () => {
+    const backend = createStaticJsonBackend('unused');
+    backend.sendPrompt = async () => {};
+    backend.waitForResponseComplete = async () => await new Promise<void>(() => {});
+    const manager = new ExecutionRunManager({
+      parentProvider: 'claude',
+      cwd: process.cwd(),
+      createBackend: () => backend,
+      sendAcp: () => {},
+    });
+    const first = await manager.start(discussionStart({
+      startRequestId: 'ask-a-1',
+      startRequestFingerprint: 'fingerprint-1',
+    }));
+    await flushAsyncEffects();
+    await expect(manager.start(discussionStart({
+      instructions: 'another question',
+      display: { participantLabel: 'B', groupId: 'discussion-1' },
+    }))).rejects.toMatchObject({ code: 'execution_run_not_allowed' });
+    const replayed = await manager.start(discussionStart({
+      startRequestId: 'ask-a-1',
+      startRequestFingerprint: 'fingerprint-1',
+    }));
+    expect(replayed.runId).toBe(first.runId);
+    await expect(manager.start(discussionStart({
+      startRequestId: 'ask-a-1',
+      startRequestFingerprint: 'fingerprint-2',
+    }))).rejects.toMatchObject({ code: 'execution_run_start_conflict' });
+  });
+
+  it('labels a stopped discussion turn and allows the next ask after stop settles', async () => {
+    let handler: ((message: AgentMessage) => void) | null = null;
+    let promptSent = false;
+    const backend: AgentBackend = {
+      async startSession() {
+        return { sessionId: 'child_session_1' as SessionId };
+      },
+      async sendPrompt() {
+        handler?.({ type: 'model-output', fullText: 'PARTIAL-CANARY' } as AgentMessage);
+        promptSent = true;
+      },
+      async waitForResponseComplete() {
+        await new Promise<void>(() => {});
+      },
+      async cancel() {},
+      onMessage(next) {
+        handler = next;
+      },
+      async dispose() {},
+    };
+    const manager = new ExecutionRunManager({
+      parentProvider: 'claude',
+      cwd: process.cwd(),
+      createBackend: () => backend,
+      sendAcp: () => {},
+    });
+    const started = await manager.start(discussionStart());
+    await flushAsyncEffects();
+    await expect.poll(() => promptSent).toBe(true);
+    await manager.stop(started.runId);
+    expect(manager.get(started.runId)?.status).toBe('cancelled');
+    expect(manager.get(started.runId)?.summary).toContain('Stopped.');
+    expect(manager.get(started.runId)?.summary).toContain('PARTIAL-CANARY');
+    const next = await manager.start(discussionStart({
+      instructions: 'Continue?',
+      display: { participantLabel: 'B', groupId: 'discussion-1' },
+    }));
+    expect(next.runId).not.toBe(started.runId);
+  });
+});

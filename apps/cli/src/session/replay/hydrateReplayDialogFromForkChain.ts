@@ -17,6 +17,7 @@ import { readMemorySynopsisPointerV1FromSessionMetadata } from '@/session/memory
 import type { HappierReplayDialogItem } from './types';
 import { fetchEncryptedTranscriptMessagesPage } from './fetchEncryptedTranscriptMessages';
 import { decryptTranscriptReplaySlice } from './decryptTranscriptReplaySlice';
+import { loadDiscussionTurnsFromSession } from './selectDiscussionRunTurns';
 
 type ForkV1 = Readonly<{
   v: 1;
@@ -228,6 +229,11 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
    * `synopsisText` (e.g. replay strategy `summary_plus_recent`).
    */
   wantSynopsisText?: boolean;
+  /**
+   * Also select committed discussion-run rows. The conversational walk asks only
+   * for user and agent roles, and discussion answers are stored as tool events.
+   */
+  includeDiscussionRunTurns?: boolean;
 }>): Promise<{
   dialog: HappierReplayDialogItem[];
   sourceCutoffSeqInclusive: number;
@@ -258,6 +264,7 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
    * the source as far as that reader is concerned.
    */
   reachedSourceStart: boolean;
+  discussionTurnsTruncated: boolean;
   /**
    * The source's most recent user turn, whether or not the window reached it.
    *
@@ -629,6 +636,32 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
    * parent-before-child and oldest-before-newest.
    */
   const dialog = [...accepted].reverse().sort((a, b) => a.createdAt - b.createdAt);
+  let discussionTurnsTruncated = false;
+  if (params.includeDiscussionRunTurns === true) {
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: params.credentials.token,
+      sessionId: params.startingSessionId,
+      limit: pageSize,
+      maxRequests,
+      deadlineAtMs,
+      ...(startingCtx?.encryptionKey ? { encryptionKey: startingCtx.encryptionKey } : {}),
+      ...(startingCtx?.encryptionVariant ? { encryptionVariant: startingCtx.encryptionVariant } : {}),
+    });
+    discussionTurnsTruncated = loaded.truncated;
+    for (const turn of loaded.turns) {
+      dialog.push({
+        role: 'Assistant',
+        createdAt: turn.createdAt,
+        seq: turn.seq,
+        sessionId: params.startingSessionId,
+        text: `${turn.label}: ${turn.text}`,
+      });
+    }
+    dialog.sort((a, b) => {
+      if (typeof a.seq === 'number' && typeof b.seq === 'number') return a.seq - b.seq;
+      return a.createdAt - b.createdAt;
+    });
+  }
   return {
     dialog,
     sourceCutoffSeqInclusive,
@@ -639,6 +672,7 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
     // reported separately, because the seed states the two differently.
     historyIncomplete: segmentContentUnavailable || unreadableRowCount > 0,
     reachedSourceStart: chainTerminatedNaturally && everySegmentExhausted && !stoppedOnBound,
+    discussionTurnsTruncated,
     lastUserDialogItem,
     sourceTitleText,
   };

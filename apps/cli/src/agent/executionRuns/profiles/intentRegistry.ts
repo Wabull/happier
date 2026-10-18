@@ -6,6 +6,7 @@ import { PlanProfile } from './plan/PlanProfile';
 import { DelegateProfile } from './delegate/DelegateProfile';
 import { VoiceAgentProfile } from './voiceAgent/VoiceAgentProfile';
 import { MemoryHintsProfile } from './memoryHints/MemoryHintsProfile';
+import { DiscussionProfile } from './discussion/DiscussionProfile';
 
 const PROFILES: Record<ExecutionRunIntent, ExecutionRunIntentProfile> = {
   review: ReviewProfile,
@@ -13,6 +14,7 @@ const PROFILES: Record<ExecutionRunIntent, ExecutionRunIntentProfile> = {
   delegate: DelegateProfile,
   voice_agent: VoiceAgentProfile,
   memory_hints: MemoryHintsProfile,
+  discussion: DiscussionProfile,
 };
 
 export function resolveExecutionRunIntentProfile(intent: ExecutionRunIntent): ExecutionRunIntentProfile {

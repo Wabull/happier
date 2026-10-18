@@ -72,6 +72,7 @@ export async function executeBoundedBackendRun(args: Readonly<{
       backendId: resolveExecutionRunRuntimeBackendId(params.backendTarget),
       backendTarget: params.backendTarget,
       instructions: params.instructions ?? '',
+      ...(typeof params.initialContext === 'string' ? { initialContext: params.initialContext } : {}),
       intentInput: params.intentInput,
       permissionMode: params.permissionMode,
       retentionPolicy: params.retentionPolicy,

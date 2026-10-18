@@ -56,6 +56,7 @@ export class ClaudeSdkAgentBackend implements AgentBackend {
       permissionHandler: AcpPermissionHandler;
       settingsPath?: string;
       env?: NodeJS.ProcessEnv;
+      extraArgs?: string[];
     }>,
   ) {
     this.env = this.opts.env ?? {};
@@ -132,6 +133,7 @@ export class ClaudeSdkAgentBackend implements AgentBackend {
         permissionMode: 'default',
         forcePermissionMode: true,
         canCallTool,
+        ...(this.opts.extraArgs && this.opts.extraArgs.length > 0 ? { extraArgs: this.opts.extraArgs } : {}),
         settingsPath: this.opts.settingsPath,
         env: this.env,
         ...(params.resume ? { resume: params.resume } : {}),

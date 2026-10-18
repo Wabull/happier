@@ -117,6 +117,17 @@ describe('createExecutionRunPermissionHandler', () => {
     });
   });
 
+  it('denies a Read attempt for a discussion no_tools run', async () => {
+    const handler = createExecutionRunPermissionHandler({
+      backendId: 'claude',
+      permissionMode: 'no_tools',
+    });
+
+    await expect(handler.handleToolCall('tool-read', 'Read', { file_path: 'README.md' })).resolves.toEqual({
+      decision: 'denied',
+    });
+  });
+
   it('denies all ACP tools for no_tools execution runs', async () => {
     const handler = createExecutionRunPermissionHandler({
       backendId: 'opencode',

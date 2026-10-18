@@ -107,6 +107,7 @@ export type ReplaySeedDraftResolution =
       dialog: readonly HappierReplayDialogItem[];
       summaryText: string | null;
       sourceCutoffSeqInclusive: number;
+      historyTruncated: boolean;
     }>
   /** Retrieval succeeded and the source carries no replayable dialog. */
   | Readonly<{ status: 'no_source_dialog' }>
@@ -155,6 +156,8 @@ export async function resolveReplaySeedDraft(params: Readonly<{
    */
   retrieval?: HappierReplayRetrievalPointerV1 | null;
   summaryRunner?: LlmTaskRunnerConfigV1 | null;
+  /** Select committed discussion-run answers into this seed. */
+  includeDiscussionRunTurns?: boolean;
   deps?: Readonly<{
     runReplaySummaryForDialog?: typeof runReplaySummaryForDialog;
   }>;
@@ -209,6 +212,7 @@ export async function resolveReplaySeedDraft(params: Readonly<{
           }),
           ...(typeof params.source.upToSeqInclusive === 'number' ? { upToSeqInclusive: params.source.upToSeqInclusive } : {}),
           ...(returningAgentLastSeenSeq === null ? {} : { afterSeqExclusive: returningAgentLastSeenSeq }),
+          ...(params.includeDiscussionRunTurns === true ? { includeDiscussionRunTurns: true } : {}),
         }).catch((error) => {
           if (isAuthenticationError(error)) throw error;
           return null;
@@ -291,7 +295,8 @@ export async function resolveReplaySeedDraft(params: Readonly<{
     // A bounded walk that stopped on its budget is not a hole, but it is still
     // history the seed does not carry — and the framer can only see the items it
     // was GIVEN, so it cannot mark that loss unless it is told.
-    windowTruncated: readHydratedReachedSourceStart(hydrated) === false,
+    windowTruncated: readHydratedReachedSourceStart(hydrated) === false
+      || (hydrated as { discussionTurnsTruncated?: boolean }).discussionTurnsTruncated === true,
   }).trim();
 
   // Retrieval succeeded; the rows simply carry nothing replayable. Nothing
@@ -304,5 +309,8 @@ export async function resolveReplaySeedDraft(params: Readonly<{
     dialog: hydrated.dialog,
     summaryText,
     sourceCutoffSeqInclusive: hydrated.sourceCutoffSeqInclusive,
+    historyTruncated: historyIncomplete
+      || readHydratedReachedSourceStart(hydrated) === false
+      || (hydrated as { discussionTurnsTruncated?: boolean }).discussionTurnsTruncated === true,
   };
 }
