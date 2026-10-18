@@ -75,6 +75,7 @@ describe('claude execution run isolation', () => {
       start: { intent: 'discussion' },
     });
 
-    expect((backend as any).opts.extraArgs).toEqual(['--tools', '']);
+    // Built-in tools off, and no MCP servers (plugin or user config) loaded for the run.
+    expect((backend as any).opts.extraArgs).toEqual(['--tools', '', '--strict-mcp-config']);
   });
 });

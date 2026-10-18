@@ -50,7 +50,8 @@ function readOutputText(output: unknown): string {
   if (typeof output === 'string') return output.trim();
   const record = asRecord(output);
   if (!record) return '';
-  return readText(record.summary) || readText(record.text) || readText(record.output);
+  // Committed SubAgentRun tool-results carry the answer as `value`.
+  return readText(record.value) || readText(record.summary) || readText(record.text) || readText(record.output);
 }
 
 /**

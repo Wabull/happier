@@ -13,7 +13,7 @@ export const executionRunBackendFactory: ExecutionRunBackendFactory = (opts) => 
     cwd: opts.cwd,
     modelId: opts.modelId ?? 'default',
     permissionHandler: opts.permissionHandler,
-    ...(disableTools ? { extraArgs: ['--tools', ''] } : {}),
+    ...(disableTools ? { extraArgs: ['--tools', '', '--strict-mcp-config'] } : {}),
     settingsPath: opts.isolation?.settingsPath,
     env: {
       ...opts.isolation?.env,
