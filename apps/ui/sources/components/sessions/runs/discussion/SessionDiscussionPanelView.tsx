@@ -11,7 +11,6 @@ export type DiscussionAttribution = Readonly<{
     label: string;
     backendId: string;
     requestedModelId: string | null;
-    observedModelId: string | null;
 }>;
 
 const stylesheet = StyleSheet.create((theme) => ({
@@ -58,23 +57,23 @@ const stylesheet = StyleSheet.create((theme) => ({
 export const SessionDiscussionPanelView = React.memo((props: Readonly<{
     recipientId: DiscussionRecipientId;
     question: string;
-    paused: boolean;
+    modelIds: Readonly<Record<DiscussionRecipientId, string>>;
     active: boolean;
+    error: string | null;
     attribution: DiscussionAttribution | null;
     onChangeRecipient: (recipientId: DiscussionRecipientId) => void;
     onChangeQuestion: (question: string) => void;
+    onChangeModel: (recipientId: DiscussionRecipientId, modelId: string) => void;
     onAsk: () => void;
     onStop: () => void;
-    onPause: () => void;
-    onResume: () => void;
 }>) => {
-    const askDisabled = props.active || props.paused || props.question.trim().length === 0;
+    const askDisabled = props.active || props.question.trim().length === 0;
     const attribution = props.attribution;
     const attributionText = attribution
         ? t('runs.discussion.attribution', {
             label: attribution.label,
             backend: attribution.backendId,
-            model: attribution.observedModelId ?? attribution.requestedModelId ?? t('runs.discussion.modelUnset'),
+            model: attribution.requestedModelId ?? t('runs.discussion.modelUnset'),
         })
         : null;
 
@@ -100,6 +99,16 @@ export const SessionDiscussionPanelView = React.memo((props: Readonly<{
                     <Text style={stylesheet.buttonText}>{t('runs.discussion.askB')}</Text>
                 </Pressable>
             </View>
+            {(['A', 'B'] as const).map((id) => (
+                <TextInput
+                    key={id}
+                    testID={`discussion-model-${id}`}
+                    value={props.modelIds[id]}
+                    onChangeText={(modelId) => props.onChangeModel(id, modelId)}
+                    placeholder={t('runs.discussion.modelPlaceholder', { label: id })}
+                    style={stylesheet.input}
+                />
+            ))}
             <TextInput
                 testID="discussion-question"
                 value={props.question}
@@ -123,17 +132,8 @@ export const SessionDiscussionPanelView = React.memo((props: Readonly<{
                         <Text style={stylesheet.buttonText}>{t('runs.discussion.stop')}</Text>
                     </Pressable>
                 ) : null}
-                {props.paused ? (
-                    <Pressable testID="discussion-resume" accessibilityRole="button" onPress={props.onResume} style={stylesheet.button}>
-                        <Text style={stylesheet.buttonText}>{t('runs.discussion.resume')}</Text>
-                    </Pressable>
-                ) : (
-                    <Pressable testID="discussion-pause" accessibilityRole="button" onPress={props.onPause} style={stylesheet.button}>
-                        <Text style={stylesheet.buttonText}>{t('runs.discussion.pause')}</Text>
-                    </Pressable>
-                )}
             </View>
-            {props.paused ? <Text testID="discussion-paused">{t('runs.discussion.paused')}</Text> : null}
+            {props.error ? <Text testID="discussion-error">{props.error}</Text> : null}
             {attributionText ? <Text testID="discussion-attribution">{attributionText}</Text> : null}
         </View>
     );

@@ -3,6 +3,9 @@ import * as React from 'react';
 import type { ExecutionRunPublicState, ExecutionRunStartRequest } from '@happier-dev/protocol';
 
 import { useExecutionRunsBackendsForSession } from '@/hooks/server/useExecutionRunsBackendsForSession';
+import { useSessionRunningExecutionRuns } from '@/hooks/session/useSessionRunningExecutionRuns';
+import { requestRunningExecutionRunsRefresh } from '@/hooks/session/sessionRunningExecutionRunsStore';
+import { randomUUID } from '@/platform/randomUUID';
 import {
     sessionExecutionRunList,
     sessionExecutionRunStart,
@@ -40,15 +43,22 @@ function readLabel(run: ExecutionRunPublicState): string {
 export function SessionDiscussionPanel(props: Readonly<{ sessionId: string }>) {
     const backends = useExecutionRunsBackendsForSession(props.sessionId);
     const capable = discussionBackends(backends);
+    const groupId = groupIdForSession(props.sessionId);
     const [recipientId, setRecipientId] = React.useState<DiscussionRecipientId>('A');
     const [question, setQuestion] = React.useState('');
-    const [paused, setPaused] = React.useState(false);
+    const [starting, setStarting] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
     const [runs, setRuns] = React.useState<readonly ExecutionRunPublicState[]>([]);
-    const startRequestIdRef = React.useRef<string | null>(null);
+    // One id per ask attempt: retrying the same unconfirmed ask reuses it; a new ask gets a new one.
+    const pendingStartRef = React.useRef<Readonly<{ key: string; startRequestId: string }> | null>(null);
     const [participants, setParticipants] = React.useState<Record<DiscussionRecipientId, ParticipantDraft>>({
         A: { label: 'A', backendId: 'claude', modelId: '' },
         B: { label: 'B', backendId: 'claude', modelId: '' },
     });
+
+    const runningRuns = useSessionRunningExecutionRuns({ sessionId: props.sessionId, enabled: capable.length > 0 });
+    const activeRun = runningRuns.find((run) => run.intent === 'discussion' && run.display?.groupId === groupId) ?? null;
+    const activeRunId = activeRun?.runId ?? null;
 
     const refresh = React.useCallback(async () => {
         const listed = await sessionExecutionRunList(props.sessionId, {});
@@ -56,9 +66,10 @@ export function SessionDiscussionPanel(props: Readonly<{ sessionId: string }>) {
         setRuns(listed.runs);
     }, [props.sessionId]);
 
+    // Reload finished runs whenever the active discussion turn starts or ends.
     React.useEffect(() => {
         void refresh();
-    }, [refresh]);
+    }, [refresh, activeRunId]);
 
     const capableKey = capable.join(',');
     React.useEffect(() => {
@@ -69,28 +80,27 @@ export function SessionDiscussionPanel(props: Readonly<{ sessionId: string }>) {
         }));
     }, [capableKey]);
 
-    const groupId = groupIdForSession(props.sessionId);
     const discussionRuns = runs.filter((run) => run.intent === 'discussion' && run.display?.groupId === groupId);
-    const activeRun = discussionRuns.find((run) => run.status === 'running') ?? null;
     const latest = [...discussionRuns].reverse().find((run) => readLabel(run).length > 0) ?? null;
     const attribution: DiscussionAttribution | null = latest ? {
         label: readLabel(latest),
         backendId: latest.backendTarget.kind === 'builtInAgent' ? latest.backendTarget.agentId : latest.backendTarget.kind,
         requestedModelId: latest.requestedConfiguration?.modelId ?? null,
-        observedModelId: typeof (latest as { observedModelId?: unknown }).observedModelId === 'string'
-            ? String((latest as { observedModelId?: string }).observedModelId)
-            : null,
     } : null;
 
     const ask = React.useCallback(async () => {
-        if (paused || activeRun) return;
+        if (starting || activeRun) return;
         const participant = participants[recipientId];
         const trimmed = question.trim();
         if (!trimmed || !participant.backendId) return;
-        const startRequestId = startRequestIdRef.current ?? `discussion:${recipientId}:${trimmed}`;
-        startRequestIdRef.current = startRequestId;
+        const modelId = participant.modelId.trim();
+        const key = JSON.stringify([recipientId, participant.backendId, modelId, trimmed]);
+        const pending = pendingStartRef.current?.key === key
+            ? pendingStartRef.current
+            : { key, startRequestId: `discussion:${randomUUID()}` };
+        pendingStartRef.current = pending;
         const request: ExecutionRunStartRequest = {
-            startRequestId,
+            startRequestId: pending.startRequestId,
             intent: 'discussion',
             backendTarget: { kind: 'builtInAgent', agentId: participant.backendId },
             instructions: trimmed,
@@ -99,21 +109,30 @@ export function SessionDiscussionPanel(props: Readonly<{ sessionId: string }>) {
             runClass: 'bounded',
             ioMode: 'request_response',
             display: { participantLabel: participant.label, groupId },
-            ...(participant.modelId.trim() ? { modelId: participant.modelId.trim() } : {}),
+            ...(modelId ? { modelId } : {}),
         };
-        const started = await sessionExecutionRunStart(props.sessionId, request);
-        if (started && 'runId' in started) {
-            startRequestIdRef.current = null;
-            setQuestion('');
-            await refresh();
+        setStarting(true);
+        setError(null);
+        try {
+            const started = await sessionExecutionRunStart(props.sessionId, request);
+            if (started && 'runId' in started) {
+                pendingStartRef.current = null;
+                setQuestion('');
+            } else {
+                const message = started && 'error' in started ? (started as { error?: unknown }).error : null;
+                setError(typeof message === 'string' && message.length > 0 ? message : 'Start failed');
+            }
+        } finally {
+            setStarting(false);
+            requestRunningExecutionRunsRefresh(props.sessionId);
         }
-    }, [activeRun, groupId, participants, paused, props.sessionId, question, recipientId, refresh]);
+    }, [activeRun, groupId, participants, props.sessionId, question, recipientId, starting]);
 
     const stop = React.useCallback(async () => {
         if (!activeRun) return;
         await sessionExecutionRunStop(props.sessionId, { runId: activeRun.runId });
-        await refresh();
-    }, [activeRun, props.sessionId, refresh]);
+        requestRunningExecutionRunsRefresh(props.sessionId);
+    }, [activeRun, props.sessionId]);
 
     if (capable.length === 0) return null;
 
@@ -121,18 +140,15 @@ export function SessionDiscussionPanel(props: Readonly<{ sessionId: string }>) {
         <SessionDiscussionPanelView
             recipientId={recipientId}
             question={question}
-            paused={paused}
-            active={activeRun !== null}
+            modelIds={{ A: participants.A.modelId, B: participants.B.modelId }}
+            active={activeRun !== null || starting}
+            error={error}
             attribution={attribution}
             onChangeRecipient={setRecipientId}
             onChangeQuestion={setQuestion}
+            onChangeModel={(id, modelId) => setParticipants((current) => ({ ...current, [id]: { ...current[id], modelId } }))}
             onAsk={() => { void ask(); }}
             onStop={() => { void stop(); }}
-            onPause={() => {
-                setPaused(true);
-                if (activeRun) void stop();
-            }}
-            onResume={() => setPaused(false)}
         />
     );
 }

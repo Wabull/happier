@@ -38,7 +38,7 @@ A discussion is a user-paced conversation inside the current session. You pick t
 
 Discussion is experimental and uses the same `execution.runs` switch as other Happier-managed runs. An older CLI that does not advertise `discussion` hides the control. Only a text-only adapter is offered. The first advertised adapter is Claude with tools disabled (`no_tools`). Codex and other adapters stay unavailable until they are shown to deny tool use.
 
-Pause stops the active turn, if one is running, and keeps the next ask disabled until you resume. Pause lives on this screen and is cleared by a restart; it is not stored. Restart still restores the participants from the discussion runs already in the transcript, and a retry of the same ask reuses the original request id instead of starting a second run. Stop ends the active turn. If some text was already produced, the run is marked stopped and keeps that partial answer.
+There is no separate Pause: nothing runs unless you ask, and only one discussion turn can be active at a time. Stop ends the active turn; if some text was already produced, the run is marked stopped and keeps that partial answer. Participants and answers stay in the session transcript. A retry of an unconfirmed ask reuses its original request id instead of starting a second run, and a new ask always gets a new id.
 
 ## Plan run vs plan mode
 

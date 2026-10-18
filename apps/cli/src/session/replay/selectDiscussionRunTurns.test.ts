@@ -34,7 +34,7 @@ describe('selectDiscussionTurns', () => {
     ]);
 
     expect(turns).toEqual([
-      expect.objectContaining({ label: 'A', text: 'CANARY-FROM-A', callId: 'call-a' }),
+      expect.objectContaining({ label: 'A', question: 'What changed?', text: 'CANARY-FROM-A', callId: 'call-a' }),
     ]);
   });
 });

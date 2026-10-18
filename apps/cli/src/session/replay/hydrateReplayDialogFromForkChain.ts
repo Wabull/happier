@@ -654,7 +654,9 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
         createdAt: turn.createdAt,
         seq: turn.seq,
         sessionId: params.startingSessionId,
-        text: `${turn.label}: ${turn.text}`,
+        text: turn.question
+          ? `User asked ${turn.label}: ${turn.question}\n\n${turn.label} answered: ${turn.text}`
+          : `${turn.label} answered: ${turn.text}`,
       });
     }
     dialog.sort((a, b) => {

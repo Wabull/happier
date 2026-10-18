@@ -23,15 +23,15 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof SessionDiscu
     return renderScreen(React.createElement(SessionDiscussionPanelView, {
         recipientId: 'A',
         question: 'What changed?',
-        paused: false,
+        modelIds: { A: '', B: '' },
         active: false,
+        error: null,
         attribution: null,
         onChangeRecipient: vi.fn(),
         onChangeQuestion: vi.fn(),
+        onChangeModel: vi.fn(),
         onAsk: vi.fn(),
         onStop: vi.fn(),
-        onPause: vi.fn(),
-        onResume: vi.fn(),
         ...overrides,
     }));
 }
@@ -42,7 +42,6 @@ describe('SessionDiscussionPanelView', () => {
             label: 'A',
             backendId: 'claude',
             requestedModelId: 'claude-sonnet',
-            observedModelId: null,
         } });
 
         expect(screen.getTextContent()).toContain('runs.discussion.askA');
@@ -54,13 +53,12 @@ describe('SessionDiscussionPanelView', () => {
         expect(ask.props.accessibilityState).toMatchObject({ disabled: true });
     });
 
-    it('keeps Ask disabled while paused and shows Resume', async () => {
-        const screen = await renderPanel({ paused: true, question: 'Next?' });
-        expect(screen.getTextContent()).toContain('runs.discussion.resume');
-        expect(screen.getTextContent()).toContain('runs.discussion.paused');
+    it('offers no Pause control and enables Ask when idle with a question', async () => {
+        const screen = await renderPanel({ question: 'Next?' });
+        expect(screen.findAllByTestId('discussion-pause')).toEqual([]);
+        expect(screen.findAllByTestId('discussion-stop')).toEqual([]);
         const ask = screen.findByTestId('discussion-ask');
         if (!ask) throw new Error('missing discussion-ask');
-        expect(ask.props.accessibilityState).toMatchObject({ disabled: true });
-        expect(screen.findAllByTestId('discussion-stop')).toEqual([]);
+        expect(ask.props.accessibilityState).toMatchObject({ disabled: false });
     });
 });

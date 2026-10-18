@@ -6,6 +6,7 @@ import { fetchEncryptedTranscriptMessagesPage } from './fetchEncryptedTranscript
 
 export type DiscussionTurn = Readonly<{
   label: string;
+  question: string;
   text: string;
   callId: string;
   seq: number | null;
@@ -14,6 +15,7 @@ export type DiscussionTurn = Readonly<{
 
 type TurnCall = Readonly<{
   label: string;
+  question: string;
   seq: number | null;
   createdAt: number;
 }>;
@@ -75,7 +77,7 @@ export function selectDiscussionTurns(bodies: readonly unknown[]): DiscussionTur
       const display = asRecord(input?.display);
       const label = readText(display?.participantLabel);
       if (!label) continue;
-      calls.set(callId, { label, seq, createdAt });
+      calls.set(callId, { label, question: readText(input?.instructions), seq, createdAt });
       continue;
     }
     const text = readOutputText(data.output);
@@ -89,6 +91,7 @@ export function selectDiscussionTurns(bodies: readonly unknown[]): DiscussionTur
     if (!result) continue;
     turns.push({
       label: call.label,
+      question: call.question,
       text: result.text,
       callId,
       seq: result.seq ?? call.seq,
