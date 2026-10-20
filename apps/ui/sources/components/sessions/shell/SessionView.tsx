@@ -99,6 +99,7 @@ import { buildNewSessionSourceContextNavigation } from '@/components/sessions/ne
 import { resolveNewSessionDraftRouteIdentity } from '@/components/sessions/new/navigation/newSessionDraftRouteIdentity';
 import { buildNewSessionLaunchRouteParams } from '@/components/sessions/new/navigation/newSessionRouteParams';
 import { sessionAbort, resumeSession } from '@/sync/ops';
+import { useSessionSharedChat } from '@/components/sessions/discussion/useSessionSharedChat';
 import { storage, useActiveServerAccountScope, useEndpointConnectivity, useIsDataReady, useLaunchSelectionMachines, useLocalSetting, useMachine, useOpenApprovalArtifactsForSession, useProfile, useRealtimeStatus, useSessionAutomationsEnabledCount, useSessionConnectedServiceAccountSwitchEvents, useSessionMessages, useSessionOrganizationProjection, useSessionPendingMessages, useSessionTranscriptIds, useSessionUsage, useSessionVisibleReadSeq, useSetting, useSettingMutable, useSettings, useSocketStatus, useSyncError, useWorkspaceReviewCommentsDrafts } from '@/sync/domains/state/storage';
 import { canContinueSessionWithFreshSpawn, canResumeSessionWithOptions } from '@/agents/runtime/resumeCapabilities';
 import { DEFAULT_AGENT_ID, getAgentCore, resolveAgentIdFromFlavor, buildResumeSessionExtrasFromUiState } from '@/agents/catalog/catalog';
@@ -1380,11 +1381,14 @@ type SessionAgentInputRuntimeStatusBoundaryProps = Omit<
 > & {
     inactiveStatusText: string | null;
     connectedServicesRestartState: SessionConnectedServicesAuthSwitchRestartState;
+    /** Shows Stop while work the session status does not track (shared-chat turns) is running. */
+    forceShowAbortButton?: boolean;
 };
 
 const SessionAgentInputRuntimeStatusBoundary = React.memo(function SessionAgentInputRuntimeStatusBoundary({
     inactiveStatusText,
     connectedServicesRestartState,
+    forceShowAbortButton,
     session,
     ...props
 }: SessionAgentInputRuntimeStatusBoundaryProps) {
@@ -1423,7 +1427,7 @@ const SessionAgentInputRuntimeStatusBoundary = React.memo(function SessionAgentI
             session={session}
             sessionActive={sessionRuntimeStatusSource.active === true}
             connectionStatus={connectionStatus}
-            showAbortButton={shouldShowAbortButtonForSessionState(sessionStatus.state)}
+            showAbortButton={forceShowAbortButton === true || shouldShowAbortButtonForSessionState(sessionStatus.state)}
         />
     );
 });
@@ -5320,8 +5324,14 @@ function SessionViewLoaded({
             sessionConnectedServicesAuthSwitch.statusBadges,
             sessionStatusBadges,
         ]);
+        const sharedChat = useSessionSharedChat({
+            sessionId,
+            metadata: session.metadata,
+            canWrite: hasWriteAccess && !isReadOnly,
+        });
         const agentInputExtraActionChips = React.useMemo(() => {
             const chips = [
+                ...sharedChat.extraActionChips,
                 ...(sessionGoalActionChip ? [sessionGoalActionChip] : []),
                 ...(extraActionChips ?? []),
                 ...(sessionMcpChip && !armedContinuationTarget ? [sessionMcpChip] : []),
@@ -5331,15 +5341,17 @@ function SessionViewLoaded({
                 ...(routingControls.extraActionChips ?? []),
             ];
             return chips.length > 0 ? chips : undefined;
-        }, [armedContinuationTarget, extraActionChips, routingControls.extraActionChips, sessionConnectedServicesAuthSwitch.connectedServicesAuthChip, sessionGoalActionChip, sessionMcpChip]);
+        }, [armedContinuationTarget, extraActionChips, routingControls.extraActionChips, sessionConnectedServicesAuthSwitch.connectedServicesAuthChip, sessionGoalActionChip, sessionMcpChip, sharedChat.extraActionChips]);
 
     const openFileViewer = React.useCallback(() => {
         openSessionTarget({ kind: 'fileBrowser' });
     }, [openSessionTarget]);
     const handleAgentInputFileViewerPress = useStableAgentInputFileViewerPress(openFileViewer);
     const handleAgentInputAbort = React.useCallback(() => {
+        // In shared chat, Stop halts the discussion turns instead of the lead agent.
+        if (sharedChat.running) return sharedChat.stop();
         return sessionAbort(sessionId);
-    }, [sessionId]);
+    }, [sessionId, sharedChat]);
     const handleAutocompleteSuggestions = React.useCallback(
         // Resolved per query, not per render: the machine target is imperative store state,
         // and a session that becomes reachable mid-composition must not need a rerender to
@@ -5353,6 +5365,16 @@ function SessionViewLoaded({
     const handleAgentInputSend = useStableAgentInputOnSend((sendOptions) => {
         if (!hasWriteAccess) {
             Modal.alert(t('common.error'), t('session.sharing.noEditPermission'));
+            return;
+        }
+
+        // Shared chat: the message goes to participants A/B through the discussion stages, never to the lead.
+        if (sharedChat.active) {
+            const sharedChatText = sendOptions?.inputTextOverride ?? message;
+            if (sharedChat.send(sharedChatText) && sharedChatText.trim().length > 0 && !sharedChat.running) {
+                setDraftValue('');
+                inputComposerClearTransientStateRef.current();
+            }
             return;
         }
 
@@ -6408,7 +6430,7 @@ function SessionViewLoaded({
             <SessionAgentInputRuntimeStatusBoundary
                 session={session}
                 sessionLatestUsage={session.latestUsage}
-                placeholder={isReadOnly ? t('session.sharing.viewOnlyMode') : t('session.inputPlaceholder')}
+                placeholder={isReadOnly ? t('session.sharing.viewOnlyMode') : (sharedChat.placeholder ?? t('session.inputPlaceholder'))}
                 value={message}
                 onChangeText={setDraftValue}
                 sessionId={sessionId}
@@ -6460,6 +6482,7 @@ function SessionViewLoaded({
                 onMicPress={micButtonState.onMicPress}
                 isMicActive={micButtonState.isMicActive}
                 onAbort={handleAgentInputAbort}
+                forceShowAbortButton={sharedChat.running}
                 inactiveStatusText={inactiveStatusText}
                 onFileViewerPress={handleAgentInputFileViewerPress}
                 // Autocomplete configuration

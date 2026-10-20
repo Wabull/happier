@@ -7,7 +7,6 @@ import { ActivitySpinner } from '@/components/ui/feedback/ActivitySpinner';
 import { ConstrainedScreenContent } from '@/components/ui/layout/ConstrainedScreenContent';
 import { Text } from '@/components/ui/text/Text';
 import { SessionExecutionRunLauncherView } from '@/components/sessions/runs/launcher/SessionExecutionRunLauncherView';
-import { SessionDiscussionPanel } from '@/components/sessions/runs/discussion/SessionDiscussionPanel';
 import { SessionInvalidLinkFallback } from '@/components/sessions/shell/SessionInvalidLinkFallback';
 import { resolveExecutionRunLauncherIntent } from '@/components/sessions/runs/launcher/executionRunLauncherModel';
 import { useSessionRouteServerScope } from '@/hooks/session/sessionRouteServerScope';
@@ -89,16 +88,13 @@ export default function SessionNewRunScreen() {
                 ) : !hydrateReady ? (
                     <ActivitySpinner size="small" color={theme.colors.text.secondary} />
                 ) : (
-                    <React.Fragment>
-                        <SessionExecutionRunLauncherView
-                            sessionId={sessionId}
-                            routeHydrationState={routeHydrationState}
-                            initialIntent={launcherIntent}
-                            presentation="screen"
-                            onRequestClose={handleRequestClose}
-                        />
-                        <SessionDiscussionPanel sessionId={sessionId} />
-                    </React.Fragment>
+                    <SessionExecutionRunLauncherView
+                        sessionId={sessionId}
+                        routeHydrationState={routeHydrationState}
+                        initialIntent={launcherIntent}
+                        presentation="screen"
+                        onRequestClose={handleRequestClose}
+                    />
                 )}
             </ConstrainedScreenContent>
         </View>

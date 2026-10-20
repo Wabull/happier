@@ -597,12 +597,17 @@ export class ExecutionRunManager {
     const existing = this.resolveStartRequest(params);
     if (existing) return existing;
     if (params.intent === 'discussion') {
+      // One active turn per participant in a discussion group. Different participants may
+      // answer the same user message concurrently.
       const groupId = params.display?.groupId?.trim() ?? '';
+      const participant = params.display?.participantLabel?.trim() ?? '';
       for (const run of this.runs.values()) {
         if (run.intent !== 'discussion' || run.status !== 'running') continue;
         const runningGroupId = run.display?.groupId?.trim() ?? '';
         if (groupId && runningGroupId && groupId !== runningGroupId) continue;
-        const error = new Error('A discussion turn is already active');
+        const runningParticipant = run.display?.participantLabel?.trim() ?? '';
+        if (participant && runningParticipant && participant !== runningParticipant) continue;
+        const error = new Error('This participant already has an active discussion turn');
         Object.assign(error, { code: 'execution_run_not_allowed' });
         throw error;
       }

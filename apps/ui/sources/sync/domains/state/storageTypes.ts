@@ -314,6 +314,11 @@ const MetadataObjectSchema = z.object({
         sourceMessageIds: z.array(z.string()).optional(),
         sourceSessionId: z.string().optional(),
     }).optional().catch(undefined),
+    // Shared-chat composer marker. Read only through `readSharedChatV1`; malformed means a normal session.
+    sharedChatV1: z.object({
+        v: z.literal(1),
+        groupId: z.string(),
+    }).passthrough().optional().catch(undefined),
 }).passthrough();
 
 export const MetadataSchema = z.preprocess((value) => {

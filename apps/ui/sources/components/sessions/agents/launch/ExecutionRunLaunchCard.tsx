@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import { useAppPaneScope } from '@/components/appShell/panes/hooks/useAppPaneScope';
@@ -7,6 +8,10 @@ import { SessionSubagentLaunchCardShell } from '@/components/sessions/agents/lau
 import { createExecutionRunLauncherDetailsTab } from '@/components/sessions/runs/launcher/executionRunLauncherModel';
 import { Text } from '@/components/ui/text/Text';
 import { t } from '@/text';
+import { Modal } from '@/modal';
+import { useExecutionRunsBackendsForSession } from '@/hooks/server/useExecutionRunsBackendsForSession';
+import { readDiscussionBackendIds } from '@/components/sessions/discussion/useSessionSharedChat';
+import { createSharedChatSession } from '@/components/sessions/discussion/sharedChatSession';
 
 const stylesheet = StyleSheet.create((theme) => ({
     row: {
@@ -51,6 +56,21 @@ export const ExecutionRunLaunchCard = React.memo((props: Readonly<{ sessionId: s
     const openNewRun = React.useCallback((intent?: ExecutionRunIntent) => {
         pane.openDetailsTab(createExecutionRunLauncherDetailsTab(intent), { intent: 'preview' });
     }, [pane]);
+    const router = useRouter();
+    const canStartSharedChat = readDiscussionBackendIds(useExecutionRunsBackendsForSession(props.sessionId)).length > 0;
+    const [startingSharedChat, setStartingSharedChat] = React.useState(false);
+    const startSharedChat = React.useCallback(async () => {
+        setStartingSharedChat(true);
+        try {
+            const sessionId = await createSharedChatSession(props.sessionId, t('runs.discussion.newSharedChatTitle'));
+            if (sessionId) router.push(`/session/${sessionId}`);
+            else Modal.alert(t('runs.discussion.newSharedChat'), t('runs.discussion.newSharedChatPending'));
+        } catch (error) {
+            Modal.alert(t('common.error'), error instanceof Error ? error.message : String(error));
+        } finally {
+            setStartingSharedChat(false);
+        }
+    }, [props.sessionId, router]);
 
     return (
         <SessionSubagentLaunchCardShell
@@ -73,6 +93,19 @@ export const ExecutionRunLaunchCard = React.memo((props: Readonly<{ sessionId: s
                         <Text style={styles.buttonText}>{t(EXECUTION_RUN_INTENT_LABEL_KEYS[intent])}</Text>
                     </Pressable>
                 ))}
+                {canStartSharedChat ? (
+                    <Pressable
+                        testID="session-subagent-launch-execution-run:shared-chat"
+                        accessibilityRole="button"
+                        accessibilityLabel={t('runs.discussion.newSharedChat')}
+                        accessibilityState={{ disabled: startingSharedChat, busy: startingSharedChat }}
+                        disabled={startingSharedChat}
+                        onPress={() => { void startSharedChat(); }}
+                        style={({ pressed }) => [styles.button, { opacity: pressed || startingSharedChat ? 0.7 : 1 }]}
+                    >
+                        <Text style={styles.buttonText}>{t('runs.discussion.newSharedChat')}</Text>
+                    </Pressable>
+                ) : null}
                 <Pressable
                     testID="session-subagent-launch-execution-run:advanced"
                     accessibilityRole="button"

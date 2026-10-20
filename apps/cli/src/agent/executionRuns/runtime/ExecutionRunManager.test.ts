@@ -2402,7 +2402,7 @@ describe('discussion turns', () => {
     expect(new Set(publics.map((run) => run.display?.groupId))).toEqual(new Set(['discussion-1']));
   });
 
-  it('rejects a second discussion start while one is active and replays the same start request', async () => {
+  it('allows one active turn per participant and replays the same start request', async () => {
     const backend = createStaticJsonBackend('unused');
     backend.sendPrompt = async () => {};
     backend.waitForResponseComplete = async () => await new Promise<void>(() => {});
@@ -2417,10 +2417,16 @@ describe('discussion turns', () => {
       startRequestFingerprint: 'fingerprint-1',
     }));
     await flushAsyncEffects();
+    // Same participant cannot speak twice at once.
     await expect(manager.start(discussionStart({
       instructions: 'another question',
-      display: { participantLabel: 'B', groupId: 'discussion-1' },
     }))).rejects.toMatchObject({ code: 'execution_run_not_allowed' });
+    // The other participant may answer the same user message concurrently ("both reply" mode).
+    const second = await manager.start(discussionStart({
+      instructions: 'What changed?',
+      display: { participantLabel: 'B', groupId: 'discussion-1' },
+    }));
+    expect(second.runId).not.toBe(first.runId);
     const replayed = await manager.start(discussionStart({
       startRequestId: 'ask-a-1',
       startRequestFingerprint: 'fingerprint-1',

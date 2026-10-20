@@ -10,6 +10,7 @@ import { Metadata } from "@/sync/domains/state/storageTypes";
 import type { OpenApprovalArtifactForSession } from '@/sync/domains/artifacts/approvalArtifacts';
 import { useLayoutMaxWidth } from "@/components/ui/layout/layout";
 import { ToolView } from '@/components/tools/shell/views/ToolView';
+import { readDiscussionTurn, type DiscussionTurnView } from '@/components/sessions/discussion/discussionModel';
 import { ToolTimelineRow } from '@/components/tools/shell/views/ToolTimelineRow';
 import { resolveToolStatusIndicatorKind } from '@/components/tools/shell/presentation/resolveToolStatusIndicatorKind';
 import { resolveInactiveSessionToolCallFailure } from '@/components/tools/shell/permissions/resolveInactiveSessionToolCallFailure';
@@ -442,7 +443,23 @@ function RenderBlock(props: {
         />
       );
 
-    case 'tool-call':
+    case 'tool-call': {
+      const discussionTurn = readDiscussionTurn(props.message.tool);
+      if (discussionTurn) {
+        return (
+          <DiscussionTurnBlock
+            message={props.message}
+            turn={discussionTurn}
+            metadata={props.metadata}
+            sessionId={props.sessionId}
+            interaction={props.interaction}
+            historical={props.historical}
+            messageRevision={props.messageRevision}
+            forkCommon={props.forkCommon}
+            messageDisplayCommon={props.messageDisplayCommon}
+          />
+        );
+      }
       return <ToolCallBlock
         message={props.message}
         metadata={props.metadata}
@@ -461,6 +478,7 @@ function RenderBlock(props: {
         toolChromeCommon={props.toolChromeCommon}
         toolRouteCommon={props.toolRouteCommon}
       />;
+    }
 
     case 'agent-event':
       return (
@@ -486,6 +504,85 @@ function RenderBlock(props: {
       const _exhaustive: never = props.message;
       throw new Error(`Unknown message kind: ${_exhaustive}`);
   }
+}
+
+/**
+ * A shared-chat discussion turn (one `SubAgentRun` with intent `discussion`) rendered as normal chat:
+ * the user's message (when this turn carries it) and the participant's attributed reply.
+ */
+function DiscussionTurnBlock(props: {
+  message: ToolCallMessage;
+  turn: DiscussionTurnView;
+  metadata: Metadata | null;
+  sessionId: string;
+  interaction: TranscriptInteraction;
+  historical?: boolean;
+  messageRevision?: number | null;
+  forkCommon: TranscriptForkCommon;
+  messageDisplayCommon: TranscriptMessageDisplayCommon;
+}) {
+  const { message, turn } = props;
+  const userMessage = React.useMemo<UserTextMessage | null>(() => turn.userText ? {
+    kind: 'user-text',
+    id: `${message.id}:shared-chat-user`,
+    localId: null,
+    createdAt: message.createdAt,
+    text: turn.userText,
+  } : null, [message.createdAt, message.id, turn.userText]);
+  const replyText = turn.status === 'running'
+    ? ''
+    : turn.text || (turn.status === 'stopped' ? t('runs.discussion.stopped') : turn.status === 'failed' ? t('runs.discussion.failed') : '');
+  const replyMessage = React.useMemo<AgentTextMessage | null>(() => replyText ? {
+    kind: 'agent-text',
+    id: `${message.id}:shared-chat-reply`,
+    localId: null,
+    createdAt: message.createdAt,
+    text: replyText,
+  } : null, [message.createdAt, message.id, replyText]);
+  const attribution = [turn.speaker, turn.backendId, turn.model].filter(Boolean).join(' · ');
+  const noop = React.useCallback(() => false, []);
+
+  return (
+    <View testID={`shared-chat-turn:${message.id}`}>
+      {userMessage ? (
+        <UserTextBlock
+          message={userMessage}
+          metadata={props.metadata}
+          sessionId={props.sessionId}
+          interaction={props.interaction}
+          canSendMessages={false}
+          canOpenFiles={props.interaction.canOpenFiles === true}
+          canPreviewMedia={props.interaction.canPreviewMedia === true}
+          canFork={false}
+          isForkAllowed={noop}
+          historical={props.historical}
+          forkCommon={props.forkCommon}
+          messageDisplayCommon={props.messageDisplayCommon}
+        />
+      ) : null}
+      <Text testID={`shared-chat-turn-attribution:${message.id}`} style={styles.sharedChatAttribution}>
+        {turn.status === 'running' ? `${attribution} · ${t('runs.discussion.replying')}` : attribution}
+      </Text>
+      {replyMessage ? (
+        <AgentTextBlock
+          message={replyMessage}
+          metadata={props.metadata}
+          sessionId={props.sessionId}
+          interaction={props.interaction}
+          canSendMessages={false}
+          canOpenFiles={props.interaction.canOpenFiles === true}
+          canPreviewMedia={props.interaction.canPreviewMedia === true}
+          canFork={false}
+          isForkAllowed={noop}
+          activeThinkingMessageId={null}
+          historical={props.historical}
+          messageRevision={props.messageRevision}
+          forkCommon={props.forkCommon}
+          messageDisplayCommon={props.messageDisplayCommon}
+        />
+      ) : null}
+    </View>
+  );
 }
 
 function UserTextBlock(props: {
@@ -1904,6 +2001,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   streamingPlainText: {
     color: theme.colors.text.primary,
+  },
+  sharedChatAttribution: {
+    marginTop: 8,
+    marginBottom: 2,
+    marginLeft: 2,
+    color: theme.colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
   },
     thinkingLabel: {
       marginBottom: 6,
