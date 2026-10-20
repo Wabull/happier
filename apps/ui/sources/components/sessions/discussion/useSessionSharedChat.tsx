@@ -148,6 +148,8 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
         if (!available || !params.canWrite) return [];
         const chips: AgentInputExtraActionChip[] = [{
             key: 'shared-chat-toggle',
+            controlId: 'recipient',
+            labelPolicy: 'auto-hide',
             stabilityKey: active,
             render: ({ chipStyle, iconColor, showLabel, textStyle, chipAnchorRef }) => (
                 <Pressable
@@ -172,6 +174,31 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
         }];
         if (!config) return chips;
 
+        chips.push({
+            key: 'shared-chat-status',
+            controlId: 'recipient',
+            stabilityKey: `${status.label}:${status.canContinue}`,
+            render: ({ chipStyle, iconColor, textStyle, chipAnchorRef }) => (
+                <Pressable
+                    ref={chipAnchorRef}
+                    testID="shared-chat-status-chip"
+                    accessibilityRole={status.canContinue ? 'button' : 'text'}
+                    accessibilityLabel={status.canContinue ? `${status.label} ${t('runs.discussion.continue')}` : status.label}
+                    disabled={!status.canContinue}
+                    onPress={continueOpen}
+                    hitSlop={{ top: 5, bottom: 10, left: 0, right: 0 }}
+                    style={({ pressed }) => chipStyle(pressed)}
+                >
+                    {status.canContinue
+                        ? normalizeNodeForView(<Icon name="play" size={AGENT_INPUT_CHIP_ICON_SIZE_PX} color={iconColor} style={AGENT_INPUT_CHIP_ICON_STYLE} />)
+                        : null}
+                    <Text numberOfLines={1} style={textStyle}>
+                        {status.canContinue ? `${status.label} · ${t('runs.discussion.continue')}` : status.label}
+                    </Text>
+                </Pressable>
+            ),
+        });
+
         for (const participantId of ['A', 'B'] as const) {
             const participant = config.participants[participantId];
             const key = `shared-chat-participant-${participantId}`;
@@ -181,6 +208,7 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
             });
             chips.push({
                 key,
+                controlId: 'recipient',
                 stabilityKey: `${participant.backendId}:${participant.modelId}:${backendIds.join(',')}`,
                 collapsedContentPopover: {
                     title: t('runs.discussion.participantTitle', { label: participantId }),
@@ -219,6 +247,7 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
             : t(`runs.discussion.modes.${config.mode}`);
         chips.push({
             key: 'shared-chat-mode',
+            controlId: 'recipient',
             stabilityKey: `${config.mode}:${config.turnLimit}`,
             collapsedContentPopover: {
                 title: t('runs.discussion.modeTitle'),
@@ -250,29 +279,6 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
             ),
         });
 
-        chips.push({
-            key: 'shared-chat-status',
-            stabilityKey: `${status.label}:${status.canContinue}`,
-            render: ({ chipStyle, iconColor, textStyle, chipAnchorRef }) => (
-                <Pressable
-                    ref={chipAnchorRef}
-                    testID="shared-chat-status-chip"
-                    accessibilityRole={status.canContinue ? 'button' : 'text'}
-                    accessibilityLabel={status.canContinue ? `${status.label} ${t('runs.discussion.continue')}` : status.label}
-                    disabled={!status.canContinue}
-                    onPress={continueOpen}
-                    hitSlop={{ top: 5, bottom: 10, left: 0, right: 0 }}
-                    style={({ pressed }) => chipStyle(pressed)}
-                >
-                    {status.canContinue
-                        ? normalizeNodeForView(<Icon name="play" size={AGENT_INPUT_CHIP_ICON_SIZE_PX} color={iconColor} style={AGENT_INPUT_CHIP_ICON_STYLE} />)
-                        : null}
-                    <Text numberOfLines={1} style={textStyle}>
-                        {status.canContinue ? `${status.label} · ${t('runs.discussion.continue')}` : status.label}
-                    </Text>
-                </Pressable>
-            ),
-        });
         return chips;
     }, [active, available, backendIds, config, continueOpen, params.canWrite, persist, running, status.canContinue, status.label, toggle]);
 
