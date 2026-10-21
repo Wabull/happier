@@ -5368,16 +5368,6 @@ function SessionViewLoaded({
             return;
         }
 
-        // Shared chat: the message goes to participants A/B through the discussion stages, never to the lead.
-        if (sharedChat.active) {
-            const sharedChatText = sendOptions?.inputTextOverride ?? message;
-            if (sharedChat.send(sharedChatText) && sharedChatText.trim().length > 0 && !sharedChat.running) {
-                setDraftValue('');
-                inputComposerClearTransientStateRef.current();
-            }
-            return;
-        }
-
         const composerMessage = sendOptions?.inputTextOverride ?? message;
         const activePendingEdit = pendingMessageEditRef.current;
         if (activePendingEdit) {
@@ -5399,6 +5389,19 @@ function SessionViewLoaded({
                     setIsComposerSendPending(false);
                 }
             })(), { tag: 'SessionView.pendingMessageEdit.save' });
+            return;
+        }
+
+        // Shared chat: the message goes to participants A/B through the discussion stages, never to the lead.
+        if (sharedChat.active) {
+            if (hasIncludedReviewCommentDrafts || (attachmentsUploadsEnabled && attachmentDrafts.length > 0)) {
+                Modal.alert(t('common.error'), t('session.participants.unsupportedAttachmentsOrReviewComments'));
+                return;
+            }
+            if (sharedChat.send(composerMessage) && composerMessage.trim().length > 0 && !sharedChat.running) {
+                setDraftValue('');
+                inputComposerClearTransientStateRef.current();
+            }
             return;
         }
 

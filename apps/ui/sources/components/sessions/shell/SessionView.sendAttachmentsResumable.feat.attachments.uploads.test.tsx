@@ -86,6 +86,9 @@ const draftHookState = vi.hoisted(() => ({
     valuesBySessionId: new Map<string, string>(),
 }));
 const chatListPropsSpy = vi.hoisted(() => vi.fn());
+const sharedChatState = vi.hoisted(() => ({ active: false, running: false }));
+const sharedChatSendSpy = vi.hoisted(() => vi.fn(() => true));
+const sharedChatStopSpy = vi.hoisted(() => vi.fn());
 
 function readLatestChatListPropsWithPendingEdit() {
     return [...chatListPropsSpy.mock.calls]
@@ -150,6 +153,16 @@ vi.mock('@/components/sessions/transcript/ChatList', () => ({
         chatListPropsSpy(props);
         return React.createElement('ChatList', props);
     },
+}));
+vi.mock('@/components/sessions/discussion/useSessionSharedChat', () => ({
+    useSessionSharedChat: () => ({
+        active: sharedChatState.active,
+        running: sharedChatState.running,
+        send: sharedChatSendSpy,
+        stop: sharedChatStopSpy,
+        extraActionChips: [],
+        placeholder: null,
+    }),
 }));
 vi.mock('@/components/ui/empty/EmptyMessages', () => ({
     EmptyMessages: () => null,
@@ -719,6 +732,10 @@ describe('SessionView (attachments.uploads resumable send)', () => {
         useFeatureEnabledSpy.mockClear();
         useFeatureDecisionSpy.mockClear();
         sessionTranscriptIdsState.current = [];
+        sharedChatState.active = false;
+        sharedChatState.running = false;
+        sharedChatSendSpy.mockClear();
+        sharedChatStopSpy.mockClear();
         draftHookState.valuesBySessionId.clear();
         clearSessionAttachmentDrafts('s1');
         const { storage } = await import('@/sync/domains/state/storage');
@@ -925,7 +942,8 @@ describe('SessionView (attachments.uploads resumable send)', () => {
         }
     });
 
-    it('loads pending edits into the composer and saves them without sending a new message', async () => {
+    it('saves a pending edit before dispatching to active shared chat', async () => {
+        sharedChatState.active = true;
         sessionPendingMessagesState.current = [{
             id: 'p1',
             text: 'queued\nmessage',
@@ -986,6 +1004,7 @@ describe('SessionView (attachments.uploads resumable send)', () => {
             });
 
             expect(updatePendingMessageSpy).toHaveBeenCalledWith('s1', 'p1', 'edited queued message');
+            expect(sharedChatSendSpy).not.toHaveBeenCalled();
             expect(sendMessageSpy).not.toHaveBeenCalled();
             expect(enqueuePendingMessageSpy).not.toHaveBeenCalled();
 
@@ -996,6 +1015,130 @@ describe('SessionView (attachments.uploads resumable send)', () => {
                 tree?.unmount();
             });
             pendingFireAndForget.length = 0;
+        }
+    });
+
+    it('sends plain composer text to active shared chat and clears the accepted draft', async () => {
+        sharedChatState.active = true;
+
+        let tree: renderer.ReactTestRenderer | undefined;
+        try {
+            tree = (await renderScreen(<AppPaneProvider>
+                        <SessionView id="s1" />
+                    </AppPaneProvider>)).tree;
+
+            const renderedTree = tree;
+            expect(renderedTree).toBeDefined();
+            if (!renderedTree) throw new Error('SessionView test renderer did not mount');
+
+            let agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            await act(async () => {
+                invokeTestInstanceHandler(agentInput, 'onChangeText', 'Discuss this change', 'AgentInput');
+            });
+            agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            await act(async () => {
+                invokeTestInstanceHandler(agentInput, 'onSend', undefined, 'AgentInput');
+            });
+
+            expect(sharedChatSendSpy).toHaveBeenCalledWith('Discuss this change');
+            expect(modalAlertSpy).not.toHaveBeenCalled();
+            agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            expect(agentInput.props.value).toBe('');
+        } finally {
+            act(() => {
+                tree?.unmount();
+            });
+        }
+    });
+
+    it('rejects shared-chat attachments without clearing the draft or attachment', async () => {
+        sharedChatState.active = true;
+
+        let tree: renderer.ReactTestRenderer | undefined;
+        try {
+            tree = (await renderScreen(<AppPaneProvider>
+                        <SessionView id="s1" />
+                    </AppPaneProvider>)).tree;
+
+            const renderedTree = tree;
+            expect(renderedTree).toBeDefined();
+            if (!renderedTree) throw new Error('SessionView test renderer did not mount');
+
+            let agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            await act(async () => {
+                invokeTestInstanceHandler(agentInput, 'onAttachmentsAdded', [
+                    { name: 'draft-note.txt', size: 1, type: 'text/plain', slice: () => new Blob([new Uint8Array([97])]) } as any,
+                ], 'AgentInput');
+                invokeTestInstanceHandler(agentInput, 'onChangeText', 'Discuss with context', 'AgentInput');
+            });
+            agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            await act(async () => {
+                invokeTestInstanceHandler(agentInput, 'onSend', undefined, 'AgentInput');
+            });
+
+            expect(sharedChatSendSpy).not.toHaveBeenCalled();
+            expect(modalAlertSpy).toHaveBeenCalledWith(
+                'common.error',
+                'session.participants.unsupportedAttachmentsOrReviewComments',
+            );
+            agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            expect(agentInput.props.value).toBe('Discuss with context');
+            expect(agentInput.props.attachments).toEqual([
+                expect.objectContaining({ label: 'draft-note.txt', status: 'pending' }),
+            ]);
+        } finally {
+            act(() => {
+                tree?.unmount();
+            });
+        }
+    });
+
+    it('rejects shared-chat review comments without clearing the draft or selection', async () => {
+        sharedChatState.active = true;
+        featureEnabledState.reviewComments = true;
+        reviewCommentDraftsState.current = [{
+            id: 'draft-1',
+            filePath: 'src/a.ts',
+            source: 'diff',
+            anchor: { kind: 'diffLine', startLine: 1, side: 'after', oldLine: 1, newLine: 1 },
+            snapshot: { selectedLines: ['+export const a = 2;'], beforeContext: [], afterContext: [] },
+            body: 'Please verify this change.',
+            createdAt: 1,
+        }];
+
+        let tree: renderer.ReactTestRenderer | undefined;
+        try {
+            tree = (await renderScreen(<AppPaneProvider>
+                        <SessionView id="s1" />
+                    </AppPaneProvider>)).tree;
+
+            const renderedTree = tree;
+            expect(renderedTree).toBeDefined();
+            if (!renderedTree) throw new Error('SessionView test renderer did not mount');
+
+            let agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            await act(async () => {
+                invokeTestInstanceHandler(agentInput, 'onChangeText', 'Discuss this review', 'AgentInput');
+            });
+            agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            await act(async () => {
+                invokeTestInstanceHandler(agentInput, 'onSend', undefined, 'AgentInput');
+            });
+
+            expect(sharedChatSendSpy).not.toHaveBeenCalled();
+            expect(modalAlertSpy).toHaveBeenCalledWith(
+                'common.error',
+                'session.participants.unsupportedAttachmentsOrReviewComments',
+            );
+            agentInput = findTestInstanceByTypeWithProps(renderedTree, 'AgentInput' as any, {}) as any;
+            expect(agentInput.props.value).toBe('Discuss this review');
+            expect(deleteWorkspaceReviewCommentDraftSpy).not.toHaveBeenCalled();
+        } finally {
+            featureEnabledState.reviewComments = false;
+            reviewCommentDraftsState.current = [];
+            act(() => {
+                tree?.unmount();
+            });
         }
     });
 
