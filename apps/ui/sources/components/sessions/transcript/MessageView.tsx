@@ -529,9 +529,12 @@ function DiscussionTurnBlock(props: {
     createdAt: message.createdAt,
     text: turn.userText,
   } : null, [message.createdAt, message.id, turn.userText]);
-  const replyText = turn.status === 'running'
-    ? ''
-    : turn.text || (turn.status === 'stopped' ? t('runs.discussion.stopped') : turn.status === 'failed' ? t('runs.discussion.failed') : '');
+  const terminalStatus = turn.status === 'stopped'
+    ? t('runs.discussion.stopped')
+    : turn.status === 'failed'
+      ? t('runs.discussion.failed')
+      : '';
+  const replyText = turn.status === 'running' ? '' : [turn.text, terminalStatus].filter(Boolean).join('\n\n');
   const replyMessage = React.useMemo<AgentTextMessage | null>(() => replyText ? {
     kind: 'agent-text',
     id: `${message.id}:shared-chat-reply`,

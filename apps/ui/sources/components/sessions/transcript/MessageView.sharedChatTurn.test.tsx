@@ -148,4 +148,21 @@ describe('MessageView (shared-chat discussion turns)', () => {
         expect(collectText(screen.findByTestId('shared-chat-turn-attribution:turn-1')?.props.children)).toBe('B · runs.discussion.replying');
         expect(screen.findAllByType('MarkdownView' as any).map((node: any) => node.props.markdown)).toEqual([]);
     });
+
+    it.each([
+        ['cancelled', 'runs.discussion.stopped'],
+        ['failed', 'runs.discussion.failed'],
+    ] as const)('keeps a partial %s reply visibly terminal', async (status, label) => {
+        const { MessageView } = await import('./MessageView');
+        const message = discussionTurn({
+            state: status === 'failed' ? 'error' : 'completed',
+            result: { status, value: 'Partial answer' },
+        });
+        const screen = await renderScreen(<MessageView message={message} metadata={null} sessionId="s1" />);
+
+        expect(screen.findAllByType('MarkdownView' as any).map((node: any) => node.props.markdown)).toEqual([
+            'Name the app',
+            `Partial answer\n\n${label}`,
+        ]);
+    });
 });

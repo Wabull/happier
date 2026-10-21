@@ -39,8 +39,13 @@ vi.mock('@/sync/runtime/getSyncSingleton', () => ({
         patchSessionMetadataWithRetry: patchSessionMetadataWithRetryMock,
     }),
 }));
+vi.mock('@/text', async () => {
+    const { createTextModuleMock } = await import('@/dev/testkit/mocks/text');
+    return createTextModuleMock({ translate: (key) => `localized:${key}` });
+});
 
 import { applySharedChatV1, createSharedChatSession, readSharedChatV1 } from './sharedChatSession';
+import { t } from '@/text';
 
 beforeEach(() => {
     machineSpawnNewSessionMock.mockClear();
@@ -113,6 +118,14 @@ describe('applySharedChatV1', () => {
 });
 
 describe('createSharedChatSession', () => {
+    it('localizes a missing source machine or folder', async () => {
+        sessionState.sessions.missing = { id: 'missing', metadata: {} };
+
+        await expect(createSharedChatSession('missing', 'Design review')).rejects.toThrow(
+            t('runs.discussion.errors.sourceUnavailable'),
+        );
+    });
+
     it('writes the spawned marker through the source server even before the spawned session is cached', async () => {
         expect(sessionState.sessions.spawned).toBeUndefined();
 

@@ -492,11 +492,13 @@ const IGNORED_UNTRANSLATED_KEYS_BY_LOCALE: Readonly<Record<string, ReadonlySet<s
         // "Errors" is the Catalan plural of "error", not an untranslated fallback.
         'inbox.errors',
         'message.runtimeConfigOutcomeKeyModel',
+        // "Model" is the Catalan computing noun, not an English fallback.
+        'runs.discussion.model',
         'session.agentActivity.screenTitle',
         'settingsSession.sessionList.headerIdentityDisplayAvatarTitle',
     ]),
-    // "Offline" is the standard Polish status word for a disconnected machine.
-    pl: new Set(['message.runtimeConfigOutcomeKeyModel', 'updates.offline']),
+    // "Model" and "Offline" are standard Polish computing terms, not English fallbacks.
+    pl: new Set(['message.runtimeConfigOutcomeKeyModel', 'runs.discussion.model', 'updates.offline']),
     // German keeps these identical to English on purpose, in the same three groups French does:
     //   product, provider and preset nouns (Happier, Codex, tmux, model ids, theme names),
     //   the English technical vocabulary German developers actually speak and which the ratified
@@ -526,6 +528,7 @@ const IGNORED_UNTRANSLATED_KEYS_BY_LOCALE: Readonly<Record<string, ReadonlySet<s
         'automations.form.schedule.cronTitle',
         'automations.form.sentence.cronFieldGuide.minute',
         'automations.form.sentence.presets',
+        'runs.discussion.engine',
         'bugReports.composer.environment.deploymentType.cloud',
         'bugReports.composer.environment.deploymentType.enterprise',
         'bugReports.composer.frequencySeverity.severity.blocker',

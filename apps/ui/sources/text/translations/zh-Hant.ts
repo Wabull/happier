@@ -1042,6 +1042,20 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     runs: {
         title: '執行',
         empty: '暫無執行記錄。',
+        discussion: {
+            observedModel: ({ model }: { model: string }) => `實際 ${model}`,
+            modeChipOpen: ({ limit }: { limit: number }) => `自由 · ${limit} 輪`,
+            status: {
+                failed: ({ error }: { error: string }) => `失敗：${error}`,
+            },
+            errors: {
+                couldNotStart: ({ speaker }: { speaker: string }) => `無法啟動 ${speaker}`,
+                runDidNotFinish: ({ speaker, status }: { speaker: string; status: string }) => `${speaker} 未完成（${status}）`,
+                answerNotSaved: ({ speaker }: { speaker: string }) => `${speaker} 的回答尚未儲存`,
+                sourceUnavailable: '此工作階段沒有可用來啟動共享聊天的機器或資料夾。',
+            },
+            failed: '失敗',
+        },
         showFinished: '顯示已完成',
         unknownMachine: '未知裝置',
         failedToLoad: '載入執行記錄失敗',

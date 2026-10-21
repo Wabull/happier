@@ -9,9 +9,16 @@ const ops = vi.hoisted(() => ({
     sessionExecutionRunStop: vi.fn(),
 }));
 vi.mock('@/sync/ops/sessionExecutionRuns', () => ops);
+vi.mock('@/text', async () => {
+    const { createTextModuleMock } = await import('@/dev/testkit/mocks/text');
+    return createTextModuleMock({
+        translate: (key, params) => `${key}:${JSON.stringify(params ?? {})}`,
+    });
+});
 
 import { planDiscussionStages } from './discussionModel';
 import { createDiscussionRunner, type DiscussionRunState } from './discussionRunner';
+import { t } from '@/text';
 
 type FakeRun = { runId: string; callId: string; speaker: string; instructions: string; status: string };
 
@@ -249,5 +256,28 @@ describe('createDiscussionRunner', () => {
         await done;
         expect(runs).toHaveLength(1);
         expect(states.at(-1)?.phase).toBe('error');
+        expect(states.at(-1)?.error).toBe(t('runs.discussion.errors.runDidNotFinish', { speaker: 'A', status: 'failed' }));
+    });
+
+    it('localizes start and transcript-settlement failures', async () => {
+        const startFailure = setup();
+        ops.sessionExecutionRunStart.mockResolvedValueOnce(null);
+        await startFailure.runner.run({
+            stages: planDiscussionStages({ mode: 'take_turns', turnLimit: 4, hasUserMessage: true }),
+            message: 'Hi',
+            participants,
+        });
+        expect(startFailure.states.at(-1)?.error).toBe(t('runs.discussion.errors.couldNotStart', { speaker: 'A' }));
+
+        const settlementFailure = setup();
+        const done = settlementFailure.runner.run({
+            stages: planDiscussionStages({ mode: 'take_turns', turnLimit: 4, hasUserMessage: true }),
+            message: 'Hi',
+            participants,
+        });
+        await until(() => settlementFailure.runs.length === 1);
+        settlementFailure.finish(0, false);
+        await done;
+        expect(settlementFailure.states.at(-1)?.error).toBe(t('runs.discussion.errors.answerNotSaved', { speaker: 'A' }));
     });
 });

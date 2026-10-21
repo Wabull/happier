@@ -6,6 +6,7 @@ import { isExecutionRunActive, type ExecutionRunPublicState } from '@happier-dev
 import { ExecutionRunStatusPill } from './ExecutionRunStatusPill';
 import { Text } from '@/components/ui/text/Text';
 import { resolveExecutionRunBackendLabel } from '@/components/sessions/runs/resolveExecutionRunBackendLabel';
+import { t } from '@/text';
 
 
 export type ExecutionRunRowRun =
@@ -25,7 +26,7 @@ export const ExecutionRunRow = React.memo((props: Readonly<{
     const observedModel = typeof run.observedModelId === 'string' ? run.observedModelId.trim() : '';
     const backendLabel = resolveExecutionRunBackendLabel(run.backendTarget);
     const discussionDetail = run.intent === 'discussion'
-        ? [backendLabel, requestedModel, observedModel ? `observed ${observedModel}` : null].filter(Boolean).join(' · ')
+        ? [backendLabel, requestedModel, observedModel ? t('runs.discussion.observedModel', { model: observedModel }) : null].filter(Boolean).join(' · ')
         : '';
     const subtitle = typeof props.subtitle === 'string'
         ? props.subtitle

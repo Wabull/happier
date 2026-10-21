@@ -2,6 +2,7 @@ import { resolveAgentIdFromFlavor } from '@/agents/registry/registryCore';
 import { resolveSessionMachineId } from '@/sync/domains/session/directSessions/resolveSessionMachineId';
 import { storage } from '@/sync/domains/state/storage';
 import type { Metadata } from '@/sync/domains/state/storageTypes';
+import { t } from '@/text';
 import { machineSpawnNewSession } from '@/sync/ops/machines';
 import { resolvePreferredServerIdForSessionId } from '@/sync/runtime/orchestration/serverScopedRpc/resolvePreferredServerIdForSessionId';
 import { getSyncSingleton } from '@/sync/runtime/getSyncSingleton';
@@ -116,7 +117,7 @@ export async function createSharedChatSession(sourceSessionId: string, title: st
     const metadata = source?.metadata ?? null;
     const machineId = resolveSessionMachineId(metadata);
     const directory = typeof metadata?.path === 'string' ? metadata.path : '';
-    if (!machineId || !directory) throw new Error('This session has no machine or folder to start a shared chat from.');
+    if (!machineId || !directory) throw new Error(t('runs.discussion.errors.sourceUnavailable'));
     const agentId = resolveAgentIdFromFlavor((metadata as { flavor?: string | null } | null)?.flavor ?? null) ?? DEFAULT_BACKEND_ID;
     const serverId = resolvePreferredServerIdForSessionId(sourceSessionId) ?? null;
     const result = await machineSpawnNewSession({

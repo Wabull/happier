@@ -2,6 +2,7 @@ import type { ExecutionRunStartRequest } from '@happier-dev/protocol';
 
 import { randomUUID } from '@/platform/randomUUID';
 import type { Message } from '@/sync/domains/messages/messageTypes';
+import { t } from '@/text';
 import {
     sessionExecutionRunGet,
     sessionExecutionRunStart,
@@ -110,7 +111,7 @@ export function createDiscussionRunner(deps: Readonly<{
         const started = await sessionExecutionRunStart(deps.sessionId, request);
         if (!started || !('runId' in started) || !('callId' in started)) {
             const message = started && 'error' in started ? String((started as { error?: unknown }).error ?? '') : '';
-            update({ error: message || `Could not start ${step.speaker}` });
+            update({ error: message || t('runs.discussion.errors.couldNotStart', { speaker: step.speaker }) });
             return 'failed';
         }
         activeRunIds.add(started.runId);
@@ -130,12 +131,12 @@ export function createDiscussionRunner(deps: Readonly<{
         }
         if (status === 'cancelled' || stopRequested) return 'stopped';
         if (status !== 'succeeded') {
-            update({ error: `${step.speaker} did not finish (${status})` });
+            update({ error: t('runs.discussion.errors.runDidNotFinish', { speaker: step.speaker, status }) });
             return 'failed';
         }
         if (!await waitForCommitted(started.callId)) {
             if (stopRequested) return 'stopped';
-            update({ error: `${step.speaker}'s answer has not been saved yet` });
+            update({ error: t('runs.discussion.errors.answerNotSaved', { speaker: step.speaker }) });
             return 'failed';
         }
         return 'succeeded';
