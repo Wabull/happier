@@ -118,33 +118,36 @@ describe('useSessionSharedChat chips', () => {
     });
 
     it('stops replaced, blurred, and unmounted runners and contains rejected cleanup', async () => {
-        const metadata = {
-            sharedChatV1: {
-                v: 1,
-                groupId: 'discussion:s1',
-                mode: 'take_turns',
-                turnLimit: 4,
-                participants: { A: { backendId: 'claude', modelId: '' }, B: { backendId: 'claude', modelId: '' } },
-            },
-        };
         const hook = await renderHook(
-            ({ focused }: { focused: boolean }) => useSessionSharedChat({
+            ({ focused, groupId }: { focused: boolean; groupId: string }) => useSessionSharedChat({
                 sessionId: 's1',
-                metadata,
+                metadata: {
+                    sharedChatV1: {
+                        v: 1,
+                        groupId,
+                        mode: 'take_turns',
+                        turnLimit: 4,
+                        participants: { A: { backendId: 'claude', modelId: '' }, B: { backendId: 'claude', modelId: '' } },
+                    },
+                },
                 canWrite: true,
                 surfaceFocused: focused,
             }),
-            { initialProps: { focused: true } },
+            { initialProps: { focused: true, groupId: 'discussion:s1' } },
         );
         expect(runnerInstances).toHaveLength(1);
         runnerInstances[0]!.stop.mockRejectedValueOnce(new Error('stop unavailable'));
 
-        await expect(hook.rerender({ focused: false })).resolves.toBeDefined();
+        await expect(hook.rerender({ focused: true, groupId: 'discussion:s2' })).resolves.toBeDefined();
         expect(runnerInstances[0]!.stop).toHaveBeenCalledWith({ dispose: true });
-
-        await hook.rerender({ focused: true });
         expect(runnerInstances).toHaveLength(2);
-        await hook.unmount();
+
+        await hook.rerender({ focused: false, groupId: 'discussion:s2' });
         expect(runnerInstances[1]!.stop).toHaveBeenCalledWith({ dispose: true });
+
+        await hook.rerender({ focused: true, groupId: 'discussion:s2' });
+        expect(runnerInstances).toHaveLength(3);
+        await hook.unmount();
+        expect(runnerInstances[2]!.stop).toHaveBeenCalledWith({ dispose: true });
     });
 });
