@@ -1,6 +1,11 @@
 export const HAPPY_AGENTS_PACKAGE = '@happier-dev/agents';
 
 export {
+  DISCUSSION_CAPABLE_AGENT_IDS,
+  isAgentDiscussionCapable,
+} from './discussionCapabilities.js';
+
+export {
     AGENT_IDS,
     PERMISSION_INTENTS,
     PERMISSION_MODES,
