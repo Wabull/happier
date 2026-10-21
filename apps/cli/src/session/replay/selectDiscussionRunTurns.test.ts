@@ -1,15 +1,25 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Network boundary: a fake transcript server that filters rows by stored role, like the real
 // /v1/sessions/:id/messages endpoint. Shapes mirror rows observed live: SubAgentRun tool rows are
 // stored with messageRole 'event', and the tool-result carries the answer as `output.value`.
 const storedRows = vi.hoisted(() => [] as Array<{ seq: number; createdAt: number; messageRole: string; content: unknown }>);
+const queuedPages = vi.hoisted(() => [] as Array<Error | {
+  messages: Array<{ seq: number; createdAt: number; messageRole: string; content: unknown }>;
+  hasMore: boolean;
+  nextBeforeSeq: number | null;
+}>);
 vi.mock('./fetchEncryptedTranscriptMessages', () => ({
-  fetchEncryptedTranscriptMessagesPage: async (params: { roles?: readonly string[] }) => ({
-    messages: storedRows.filter((row) => !params.roles || params.roles.includes(row.messageRole)),
-    hasMore: false,
-    nextBeforeSeq: null,
-  }),
+  fetchEncryptedTranscriptMessagesPage: async (params: { roles?: readonly string[] }) => {
+    const queued = queuedPages.shift();
+    if (queued instanceof Error) throw queued;
+    if (queued) return queued;
+    return {
+      messages: storedRows.filter((row) => !params.roles || params.roles.includes(row.messageRole)),
+      hasMore: false,
+      nextBeforeSeq: null,
+    };
+  },
 }));
 
 import { loadDiscussionTurnsFromSession, selectDiscussionTurns } from './selectDiscussionRunTurns';
@@ -19,6 +29,11 @@ function acpRow(seq: number, data: Record<string, unknown>) {
 }
 
 describe('selectDiscussionTurns', () => {
+  beforeEach(() => {
+    storedRows.splice(0, storedRows.length);
+    queuedPages.splice(0, queuedPages.length);
+  });
+
   it('keeps a committed discussion answer with its participant label', () => {
     const turns = selectDiscussionTurns([
       {
@@ -76,5 +91,92 @@ describe('selectDiscussionTurns', () => {
     expect(loaded.turns).toEqual([
       expect.objectContaining({ label: 'A', question: 'Pick a codeword.', text: 'ZEBRA4817' }),
     ]);
+  });
+
+  it('pairs a discussion call and result fetched on different transcript pages', async () => {
+    queuedPages.push(
+      {
+        messages: [acpRow(2, { type: 'tool-result', callId: 'call-a', output: { value: 'ZEBRA4817' } })],
+        hasMore: true,
+        nextBeforeSeq: 2,
+      },
+      {
+        messages: [acpRow(1, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'call-a',
+          input: { intent: 'discussion', display: { participantLabel: 'A' }, instructions: 'Pick a codeword.' },
+        })],
+        hasMore: false,
+        nextBeforeSeq: null,
+      },
+    );
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 1,
+      maxRequests: 2,
+      deadlineAtMs: Date.now() + 10_000,
+    });
+
+    expect(loaded).toEqual({
+      turns: [expect.objectContaining({ label: 'A', question: 'Pick a codeword.', text: 'ZEBRA4817' })],
+      truncated: false,
+    });
+  });
+
+  it('pairs rows already fetched before the request budget truncates pagination', async () => {
+    queuedPages.push(
+      {
+        messages: [acpRow(2, { type: 'tool-result', callId: 'call-a', output: { value: 'ZEBRA4817' } })],
+        hasMore: true,
+        nextBeforeSeq: 2,
+      },
+      {
+        messages: [acpRow(1, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'call-a',
+          input: { intent: 'discussion', display: { participantLabel: 'A' }, instructions: 'Pick a codeword.' },
+        })],
+        hasMore: true,
+        nextBeforeSeq: 1,
+      },
+    );
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 1,
+      maxRequests: 2,
+      deadlineAtMs: Date.now() + 10_000,
+    });
+
+    expect(loaded.turns).toEqual([
+      expect.objectContaining({ label: 'A', question: 'Pick a codeword.', text: 'ZEBRA4817' }),
+    ]);
+    expect(loaded.truncated).toBe(true);
+  });
+
+  it('marks replay truncated when a later transcript page is unavailable', async () => {
+    queuedPages.push(
+      {
+        messages: [acpRow(2, { type: 'tool-result', callId: 'call-a', output: { value: 'ZEBRA4817' } })],
+        hasMore: true,
+        nextBeforeSeq: 2,
+      },
+      new Error('transcript unavailable'),
+    );
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 1,
+      maxRequests: 2,
+      deadlineAtMs: Date.now() + 10_000,
+    });
+
+    expect(loaded).toEqual({ turns: [], truncated: true });
   });
 });

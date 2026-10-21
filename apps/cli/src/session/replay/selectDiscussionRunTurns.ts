@@ -151,7 +151,7 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
   encryptionKey?: Uint8Array | null;
   encryptionVariant?: SessionEncryptionContext['encryptionVariant'];
 }>): Promise<Readonly<{ turns: DiscussionTurn[]; truncated: boolean }>> {
-  const turns: DiscussionTurn[] = [];
+  const rows: Array<Readonly<{ seq?: unknown; createdAt?: unknown; content?: unknown }>> = [];
   let beforeSeq: number | undefined;
   let requests = 0;
   let truncated = false;
@@ -172,11 +172,7 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
       truncated = true;
       break;
     }
-    turns.push(...selectDiscussionTurnsFromTranscriptRows({
-      rows: page.messages,
-      ...(params.encryptionKey ? { encryptionKey: params.encryptionKey } : {}),
-      ...(params.encryptionVariant ? { encryptionVariant: params.encryptionVariant } : {}),
-    }));
+    rows.push(...page.messages);
     if (!page.hasMore) break;
     if (page.nextBeforeSeq === null || (typeof beforeSeq === 'number' && page.nextBeforeSeq >= beforeSeq)) {
       truncated = true;
@@ -189,5 +185,12 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
     }
   }
 
-  return { turns, truncated };
+  return {
+    turns: selectDiscussionTurnsFromTranscriptRows({
+      rows,
+      ...(params.encryptionKey ? { encryptionKey: params.encryptionKey } : {}),
+      ...(params.encryptionVariant ? { encryptionVariant: params.encryptionVariant } : {}),
+    }),
+    truncated,
+  };
 }
