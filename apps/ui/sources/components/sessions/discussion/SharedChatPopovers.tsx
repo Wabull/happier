@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { StyleSheet } from 'react-native-unistyles';
 
 import { Text, TextInput } from '@/components/ui/text/Text';
+import { Typography } from '@/constants/Typography';
 import { t } from '@/text';
 
 import { MAX_OPEN_TURN_LIMIT, type DiscussionMode, type DiscussionParticipantId } from './discussionModel';
@@ -17,9 +18,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         padding: 12,
     },
     sectionLabel: {
+        ...Typography.eyebrow(),
         color: theme.colors.text.secondary,
-        fontSize: 12,
-        fontWeight: '600',
     },
     row: {
         flexDirection: 'row',
@@ -38,8 +38,8 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: theme.colors.surface.inset,
     },
     optionText: {
+        ...Typography.rowTitle(),
         color: theme.colors.text.primary,
-        fontSize: 13,
     },
     modeOption: {
         paddingVertical: 8,
@@ -50,17 +50,17 @@ const stylesheet = StyleSheet.create((theme) => ({
         gap: 2,
     },
     help: {
+        ...Typography.rowMeta(),
         color: theme.colors.text.secondary,
-        fontSize: 12,
     },
     input: {
+        ...Typography.rowTitle(),
         color: theme.colors.text.primary,
         borderWidth: 1,
         borderColor: theme.colors.border.default,
         borderRadius: 8,
         paddingHorizontal: 10,
         paddingVertical: 6,
-        fontSize: 13,
     },
     stepper: {
         flexDirection: 'row',

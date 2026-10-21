@@ -13,7 +13,7 @@ where all of that becomes visible in one place.
   default**, and experimental toggles are themselves hidden until the
   experiments switch at the top of **Settings → Features** is on. If you have
   turned Subagents on and still see nothing, the master switch is almost always
-  why. See [Feature flags](/extras/feature-flags) for `execution.runs`.
+  why. See [Feature flags](/extras/feature-flags) for **Execution runs**.
 </Callout>
 
 In one session, you can have:
@@ -34,7 +34,7 @@ Use a Happier-managed run when the user explicitly asks for a Happier-managed ru
 
 ## Shared chat
 
-Shared chat turns a session into a conversation between you and two AI participants, A and B. Start one with **New shared chat** in the session's Subagents launch card (it opens a new session named "Shared chat" in the sidebar), or switch the current session over with the **Shared chat** chip in the composer. Switching the chip off returns the composer to the session's own agent.
+Shared chat turns a session into a conversation between you and two AI participants, A and B. Start one with **New shared chat** under **Launch** in the session's **Agents** surface (it opens a new session named "Shared chat" in the sidebar), or switch the current session over with the **Shared chat** chip in the composer. Switching the chip off returns the composer to the session's own agent.
 
 While shared chat is on, the normal composer sends your message to the participants instead of the session agent. The toolbar shows:
 
@@ -45,11 +45,11 @@ While shared chat is on, the normal composer sends your message to the participa
   - **Open discussion**: after your message, A and B alternate for the chosen number of turns (1 to 12) and then stop. **Continue** runs another round of the same length; a new message also starts one.
 - A **status** chip that says whose turn it is.
 
-Stop (the composer's stop button) halts the active replies and every remaining turn. Nothing runs again until you send a message or press Continue. There is no separate Pause.
+Stop (the composer's stop button) halts the active replies and every remaining turn. Leaving the session screen mid-round does the same; returning does not resume the round. Nothing runs again until you send a message or press Continue. There is no separate Pause.
 
 Each reply is one bounded, text-only run with tools disabled. The participant receives the shared conversation (your messages and earlier attributed replies) from the session transcript, so it survives reloads and appears on every device. In the transcript, your message shows as a normal message and each reply is labelled with its participant, engine and model.
 
-Shared chat uses the same experimental `execution.runs` switch as other Happier-managed runs, and only engines that support text-only discussion are offered (currently Claude). The setup (participants, mode and turn limit) is saved with the session.
+Shared chat uses the same experimental **Execution runs** switch under **Settings → Features → Experiments** as other Happier-managed runs, and only engines that support text-only discussion are offered (currently Claude). The setup (participants, mode and turn limit) is saved with the session.
 
 ## Plan run vs plan mode
 

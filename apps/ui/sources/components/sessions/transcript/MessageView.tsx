@@ -32,6 +32,7 @@ import { useTranscriptMotion } from '@/components/sessions/transcript/motion/Tra
 import { ThinkingTimelineRow } from '@/components/sessions/transcript/thinking/ThinkingTimelineRow';
 import { TranscriptEventRow } from '@/components/sessions/transcript/events/TranscriptEventRow';
 import { transcriptMarkdownTextStyle } from '@/components/sessions/transcript/transcriptMarkdownTypography';
+import { Typography } from '@/constants/Typography';
 import { parseHappierMetaEnvelope } from '@/components/sessions/transcript/structured/happierMetaEnvelope';
 import { readUnsupportedContentMeta, type UnsupportedContentKind } from '@/sync/domains/messages/unsupportedContentMeta';
 import { resolveUnsupportedContentLabel } from '@/sync/domains/messages/resolveUnsupportedContentLabel';
@@ -2006,12 +2007,12 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.text.primary,
   },
   sharedChatAttribution: {
+    ...Typography.rowMeta(),
+    ...Typography.default('semiBold'),
     marginTop: 8,
     marginBottom: 2,
     marginLeft: 2,
     color: theme.colors.text.secondary,
-    fontSize: 12,
-    fontWeight: '600',
   },
     thinkingLabel: {
       marginBottom: 6,
