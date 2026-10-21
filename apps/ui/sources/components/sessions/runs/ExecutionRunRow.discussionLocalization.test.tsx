@@ -33,7 +33,6 @@ describe('ExecutionRunRow discussion localization', () => {
             intent: 'discussion',
             backendTarget: { kind: 'builtInAgent', agentId: 'claude' },
             status: 'succeeded',
-            display: null,
             requestedConfiguration: { modelId: 'requested-model' },
             observedModelId: 'actual-model',
         }} />);
