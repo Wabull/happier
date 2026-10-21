@@ -63,15 +63,16 @@ function setup() {
         runs[index]!.status = 'succeeded';
         if (commit) messages.push(settledMessage(runs[index]!.callId));
     };
+    const readMessages = vi.fn(() => messages);
     const runner = createDiscussionRunner({
         sessionId: 's1',
         groupId: 'discussion:s1',
-        readMessages: () => messages,
+        readMessages,
         onState: (state) => states.push(state),
         pollMs: 1,
         settleTimeoutMs: 50,
     });
-    return { runs, messages, states, finish, runner };
+    return { runs, messages, states, finish, readMessages, runner };
 }
 
 async function until(predicate: () => boolean) {
@@ -164,6 +165,76 @@ describe('createDiscussionRunner', () => {
         expect(ops.sessionExecutionRunStop).toHaveBeenCalledWith('s1', { runId: 'run-1' });
         expect(runs).toHaveLength(1);
         expect(states.at(-1)).toMatchObject({ phase: 'stopped', activeSpeakers: [] });
+    });
+
+    it('disposes an active run without publishing stale state or starting another stage', async () => {
+        const { runs, runner, states } = setup();
+        const done = runner.run({
+            stages: planDiscussionStages({ mode: 'open', turnLimit: 4, hasUserMessage: true }),
+            message: 'Go',
+            participants,
+        });
+        await until(() => runs.length === 1);
+        const stateCountAtDispose = states.length;
+
+        await runner.stop({ dispose: true });
+        await done;
+
+        expect(ops.sessionExecutionRunStop).toHaveBeenCalledWith('s1', { runId: runs[0]!.runId });
+        expect(ops.sessionExecutionRunStart).toHaveBeenCalledTimes(1);
+        expect(states).toHaveLength(stateCountAtDispose);
+    });
+
+    it('disposes a run whose start resolves after cleanup without stale state or another stage', async () => {
+        let resolveStart!: (value: { runId: string; callId: string; sidechainId: string }) => void;
+        ops.sessionExecutionRunStart.mockImplementationOnce(() => new Promise((resolve) => {
+            resolveStart = resolve;
+        }));
+        ops.sessionExecutionRunGet.mockResolvedValue({ run: { runId: 'run-late', status: 'cancelled' } });
+        ops.sessionExecutionRunStop.mockResolvedValue({ ok: true });
+        const states: DiscussionRunState[] = [];
+        const runner = createDiscussionRunner({
+            sessionId: 's1',
+            groupId: 'discussion:s1',
+            readMessages: () => [],
+            onState: (state) => states.push(state),
+            pollMs: 1,
+            settleTimeoutMs: 50,
+        });
+        const done = runner.run({
+            stages: planDiscussionStages({ mode: 'take_turns', turnLimit: 4, hasUserMessage: true }),
+            message: 'Go',
+            participants,
+        });
+        await until(() => ops.sessionExecutionRunStart.mock.calls.length === 1);
+        const stateCountAtDispose = states.length;
+
+        await runner.stop({ dispose: true });
+        resolveStart({ runId: 'run-late', callId: 'call-late', sidechainId: 'call-late' });
+        await done;
+
+        expect(ops.sessionExecutionRunStop).toHaveBeenCalledWith('s1', { runId: 'run-late' });
+        expect(ops.sessionExecutionRunStart).toHaveBeenCalledTimes(1);
+        expect(states).toHaveLength(stateCountAtDispose);
+    });
+
+    it('disposes during transcript settlement without reporting failure or starting another stage', async () => {
+        const { runs, finish, readMessages, runner, states } = setup();
+        const done = runner.run({
+            stages: planDiscussionStages({ mode: 'take_turns', turnLimit: 4, hasUserMessage: true }),
+            message: 'Go',
+            participants,
+        });
+        await until(() => runs.length === 1);
+        finish(0, false);
+        await until(() => readMessages.mock.calls.length > 0);
+        const stateCountAtDispose = states.length;
+
+        await runner.stop({ dispose: true });
+        await done;
+
+        expect(ops.sessionExecutionRunStart).toHaveBeenCalledTimes(1);
+        expect(states).toHaveLength(stateCountAtDispose);
     });
 
     it('a failed turn halts the rest with an error', async () => {

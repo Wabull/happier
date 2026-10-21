@@ -5328,6 +5328,7 @@ function SessionViewLoaded({
             sessionId,
             metadata: session.metadata,
             canWrite: hasWriteAccess && !isReadOnly,
+            surfaceFocused,
         });
         const agentInputExtraActionChips = React.useMemo(() => {
             const chips = [
@@ -5347,11 +5348,13 @@ function SessionViewLoaded({
         openSessionTarget({ kind: 'fileBrowser' });
     }, [openSessionTarget]);
     const handleAgentInputFileViewerPress = useStableAgentInputFileViewerPress(openFileViewer);
+    const sharedChatRunning = sharedChat.running;
+    const stopSharedChat = sharedChat.stop;
     const handleAgentInputAbort = React.useCallback(() => {
         // In shared chat, Stop halts the discussion turns instead of the lead agent.
-        if (sharedChat.running) return sharedChat.stop();
+        if (sharedChatRunning) return stopSharedChat();
         return sessionAbort(sessionId);
-    }, [sessionId, sharedChat]);
+    }, [sessionId, sharedChatRunning, stopSharedChat]);
     const handleAutocompleteSuggestions = React.useCallback(
         // Resolved per query, not per render: the machine target is imperative store state,
         // and a session that becomes reachable mid-composition must not need a rerender to

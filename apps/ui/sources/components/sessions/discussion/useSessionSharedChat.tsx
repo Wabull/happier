@@ -14,6 +14,7 @@ import { Text } from '@/components/ui/text/Text';
 import { useExecutionRunsBackendsForSession } from '@/hooks/server/useExecutionRunsBackendsForSession';
 import { useSessionSubagentSourceMessages } from '@/sync/domains/state/storage';
 import { t } from '@/text';
+import { fireAndForget } from '@/utils/system/fireAndForget';
 
 import { planDiscussionStages, type DiscussionMode, type DiscussionParticipantId } from './discussionModel';
 import { createDiscussionRunner, IDLE_DISCUSSION_RUN_STATE, type DiscussionRunState } from './discussionRunner';
@@ -25,9 +26,12 @@ import {
     type SharedChatConfig,
 } from './sharedChatSession';
 
+const EMPTY_DISCUSSION_BACKEND_IDS: readonly string[] = [];
+const EMPTY_SHARED_CHAT_ACTION_CHIPS: readonly AgentInputExtraActionChip[] = [];
+
 /** Backends whose execution-run capability advertises `discussion` (text-only, no tools). */
-export function readDiscussionBackendIds(backends: Readonly<Record<string, unknown>> | null | undefined): string[] {
-    if (!backends) return [];
+export function readDiscussionBackendIds(backends: Readonly<Record<string, unknown>> | null | undefined): readonly string[] {
+    if (!backends) return EMPTY_DISCUSSION_BACKEND_IDS;
     return Object.entries(backends)
         .filter(([, entry]) => {
             const record = entry && typeof entry === 'object' ? entry as { intents?: unknown; available?: unknown } : null;
@@ -74,7 +78,12 @@ export function describeSharedChatStatus(params: Readonly<{
  * Send runs the discussion stages instead of messaging the lead agent, and the toolbar shows the
  * participant, mode and status chips. Without the marker the session behaves exactly as before.
  */
-export function useSessionSharedChat(params: Readonly<{ sessionId: string; metadata: unknown; canWrite: boolean }>) {
+export function useSessionSharedChat(params: Readonly<{
+    sessionId: string;
+    metadata: unknown;
+    canWrite: boolean;
+    surfaceFocused: boolean;
+}>) {
     const { sessionId } = params;
     const marker = readSharedChatV1(params.metadata);
     const markerKey = JSON.stringify(marker);
@@ -85,7 +94,11 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [markerKey]);
 
-    const backendIds = readDiscussionBackendIds(useExecutionRunsBackendsForSession(sessionId));
+    const backendIdsKey = readDiscussionBackendIds(useExecutionRunsBackendsForSession(sessionId)).join('\u0000');
+    const backendIds = React.useMemo<readonly string[]>(
+        () => backendIdsKey ? backendIdsKey.split('\u0000') : EMPTY_DISCUSSION_BACKEND_IDS,
+        [backendIdsKey],
+    );
     const messages = useSessionSubagentSourceMessages(sessionId);
     const messagesRef = React.useRef(messages);
     messagesRef.current = messages;
@@ -93,12 +106,19 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
     const [runState, setRunState] = React.useState<DiscussionRunState>(IDLE_DISCUSSION_RUN_STATE);
     const [lastRunMode, setLastRunMode] = React.useState<DiscussionMode | null>(null);
     const groupId = config?.groupId ?? null;
-    const runner = React.useMemo(() => groupId ? createDiscussionRunner({
+    const runner = React.useMemo(() => groupId && params.surfaceFocused ? createDiscussionRunner({
         sessionId,
         groupId,
         readMessages: () => messagesRef.current,
         onState: setRunState,
-    }) : null, [groupId, sessionId]);
+    }) : null, [groupId, params.surfaceFocused, sessionId]);
+    React.useEffect(() => {
+        setRunState(IDLE_DISCUSSION_RUN_STATE);
+        return () => {
+            if (!runner) return;
+            fireAndForget(runner.stop({ dispose: true }), { tag: 'useSessionSharedChat.cleanup' });
+        };
+    }, [runner]);
 
     const running = runState.phase === 'running';
     const active = config !== null;
@@ -113,11 +133,11 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
     const startStages = React.useCallback((message: string, startWith?: DiscussionParticipantId) => {
         if (!runner || !config || running) return;
         setLastRunMode(config.mode);
-        void runner.run({
+        fireAndForget(runner.run({
             stages: planDiscussionStages({ mode: config.mode, turnLimit: config.turnLimit, startWith, hasUserMessage: message.length > 0 }),
             message,
             participants: config.participants,
-        });
+        }), { tag: 'useSessionSharedChat.run' });
     }, [config, runner, running]);
 
     /** Returns true when shared chat handled the message (the lead agent must not receive it). */
@@ -144,8 +164,8 @@ export function useSessionSharedChat(params: Readonly<{ sessionId: string; metad
         persist(active ? null : (config ?? defaultSharedChatConfig(sessionId)));
     }, [active, config, persist, sessionId]);
 
-    const extraActionChips = React.useMemo<AgentInputExtraActionChip[]>(() => {
-        if (!available || !params.canWrite) return [];
+    const extraActionChips = React.useMemo<readonly AgentInputExtraActionChip[]>(() => {
+        if (!available || !params.canWrite) return EMPTY_SHARED_CHAT_ACTION_CHIPS;
         const chips: AgentInputExtraActionChip[] = [{
             key: 'shared-chat-toggle',
             controlId: 'recipient',

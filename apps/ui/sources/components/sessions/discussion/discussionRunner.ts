@@ -49,9 +49,11 @@ export function createDiscussionRunner(deps: Readonly<{
     const settleTimeoutMs = deps.settleTimeoutMs ?? 20_000;
     const activeRunIds = new Set<string>();
     let stopRequested = false;
+    let disposed = false;
     let state: DiscussionRunState = IDLE_DISCUSSION_RUN_STATE;
 
     const update = (next: Partial<DiscussionRunState>) => {
+        if (disposed) return;
         state = { ...state, ...next };
         deps.onState(state);
     };
@@ -60,7 +62,9 @@ export function createDiscussionRunner(deps: Readonly<{
     async function waitForTerminal(runId: string): Promise<string> {
         let failures = 0;
         for (;;) {
+            if (stopRequested) return 'cancelled';
             const result = await sessionExecutionRunGet(deps.sessionId, { runId });
+            if (stopRequested) return 'cancelled';
             const status = result && 'run' in result ? String((result as { run: { status?: unknown } }).run.status ?? '') : '';
             if (status && status !== 'running') return status;
             if (!status) {
@@ -76,9 +80,11 @@ export function createDiscussionRunner(deps: Readonly<{
     async function waitForCommitted(callId: string): Promise<boolean> {
         const deadline = Date.now() + settleTimeoutMs;
         while (Date.now() < deadline) {
+            if (stopRequested) return false;
             if (readDiscussionCallState(deps.readMessages(), callId) === 'settled') return true;
             await sleep(Math.min(pollMs, 250));
         }
+        if (stopRequested) return false;
         return readDiscussionCallState(deps.readMessages(), callId) === 'settled';
     }
 
@@ -108,15 +114,27 @@ export function createDiscussionRunner(deps: Readonly<{
             return 'failed';
         }
         activeRunIds.add(started.runId);
-        if (stopRequested) await sessionExecutionRunStop(deps.sessionId, { runId: started.runId });
-        const status = await waitForTerminal(started.runId);
-        activeRunIds.delete(started.runId);
+        if (stopRequested) {
+            try {
+                await sessionExecutionRunStop(deps.sessionId, { runId: started.runId });
+            } finally {
+                activeRunIds.delete(started.runId);
+            }
+            return 'stopped';
+        }
+        let status: string;
+        try {
+            status = await waitForTerminal(started.runId);
+        } finally {
+            activeRunIds.delete(started.runId);
+        }
         if (status === 'cancelled' || stopRequested) return 'stopped';
         if (status !== 'succeeded') {
             update({ error: `${step.speaker} did not finish (${status})` });
             return 'failed';
         }
         if (!await waitForCommitted(started.callId)) {
+            if (stopRequested) return 'stopped';
             update({ error: `${step.speaker}'s answer has not been saved yet` });
             return 'failed';
         }
@@ -129,6 +147,7 @@ export function createDiscussionRunner(deps: Readonly<{
             message: string;
             participants: Readonly<Record<DiscussionParticipantId, DiscussionParticipantConfig>>;
         }>): Promise<void> {
+            if (disposed) return;
             stopRequested = false;
             const plannedTurns = params.stages.reduce((sum, stage) => sum + stage.length, 0);
             update({ phase: 'running', activeSpeakers: [], completedTurns: 0, plannedTurns, error: null });
@@ -150,8 +169,9 @@ export function createDiscussionRunner(deps: Readonly<{
             }
             update({ phase: stopRequested ? 'stopped' : 'idle', activeSpeakers: [] });
         },
-        async stop(): Promise<void> {
+        async stop(options?: Readonly<{ dispose?: boolean }>): Promise<void> {
             stopRequested = true;
+            if (options?.dispose === true) disposed = true;
             await Promise.all([...activeRunIds].map((runId) => sessionExecutionRunStop(deps.sessionId, { runId })));
         },
     };
