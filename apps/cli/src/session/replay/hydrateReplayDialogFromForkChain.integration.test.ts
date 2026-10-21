@@ -1058,6 +1058,7 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
      */
     parentSessionId?: string;
     parentRows?: readonly Row[];
+    includeDiscussionRunTurns?: boolean;
     /** Fail every transcript page request after this many have succeeded. */
     failMessageRequestsAfter?: number;
   }>) {
@@ -1161,6 +1162,7 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
       wantSynopsisText: false,
       ...(params.charBudget === undefined ? {} : { planTranscriptCharBudget: () => params.charBudget ?? null }),
       ...(params.afterSeqExclusive === undefined ? {} : { afterSeqExclusive: params.afterSeqExclusive }),
+      ...(params.includeDiscussionRunTurns === true ? { includeDiscussionRunTurns: true } : {}),
     });
     return { result, requests, messageRequests: requests, parentRequests };
   }
@@ -1386,6 +1388,38 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
     }
     expect(parentRequests).toContain('messages');
     expect(result?.dialog.map((item) => item.text)).toEqual(['parent turn', 'child turn']);
+  });
+
+  it('keeps fork-chain rows chronological when different sessions reuse seq values', async () => {
+    const { result } = await run({
+      rows: [{ ...textRow(1, 'agent', 'child turn'), createdAt: 2_000 }],
+      parentSessionId: 'sess_window_parent',
+      parentRows: [{ ...textRow(100, 'user', 'parent turn'), createdAt: 1_000 }],
+      includeDiscussionRunTurns: true,
+      session: {
+        metadata: JSON.stringify({
+          flavor: 'claude',
+          path: '/tmp',
+          forkV1: { v: 1, parentSessionId: 'sess_window_parent', parentCutoffSeqInclusive: 100 },
+        }),
+      },
+      charBudget: 100_000,
+    });
+
+    expect(result?.dialog.map((item) => item.text)).toEqual(['parent turn', 'child turn']);
+  });
+
+  it('uses same-session seq to order rows with equal timestamps', async () => {
+    const { result } = await run({
+      rows: [
+        { ...textRow(2, 'agent', 'second'), createdAt: 1_000 },
+        { ...textRow(1, 'user', 'first'), createdAt: 1_000 },
+      ],
+      includeDiscussionRunTurns: true,
+      charBudget: 100_000,
+    });
+
+    expect(result?.dialog.map((item) => item.text)).toEqual(['first', 'second']);
   });
 
   it('reports the Session title so the seed can state what the Session is for', async () => {

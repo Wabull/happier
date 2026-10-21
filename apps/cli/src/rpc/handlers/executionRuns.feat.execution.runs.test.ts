@@ -335,6 +335,41 @@ function createCancelRaceBackend(params: Readonly<{
 }
 
 describe('executionRuns session RPC handlers', () => {
+  it('rejects an unsupported discussion shape before acquiring start resources', async () => {
+    const { readCredentials } = await import('@/persistence');
+    const resolveAccountSettings = vi.fn(async () => ({ codexBackendMode: 'mcp' }));
+    const client = createEncryptedRpcTestClient({
+      scopePrefix: 'sess_1',
+      registerHandlers: (rpc) => {
+        registerExecutionRunHandlers(rpc, {
+          sessionId: 'sess_1',
+          cwd: process.cwd(),
+          parentProvider: 'claude',
+          createBackend: () => createStaticBackend('unused'),
+          sendAcp: () => {},
+          resolveAccountSettings,
+        });
+      },
+    });
+
+    await expect(client.call<any, any>(SESSION_RPC_METHODS.EXECUTION_RUN_START, {
+      intent: 'discussion',
+      backendTarget: { kind: 'builtInAgent', agentId: 'claude' },
+      instructions: 'Discuss this.',
+      permissionMode: 'no_tools',
+      retentionPolicy: 'ephemeral',
+      runClass: 'long_lived',
+      ioMode: 'streaming',
+    })).resolves.toEqual({
+      ok: false,
+      error: 'Unsupported discussion run shape',
+      errorCode: 'execution_run_not_allowed',
+    });
+
+    expect(resolveAccountSettings).not.toHaveBeenCalled();
+    expect(readCredentials).not.toHaveBeenCalled();
+  });
+
   it('returns the accepted requested configuration from execution.run.start', async () => {
     const client = createEncryptedRpcTestClient({
       scopePrefix: 'sess_1',

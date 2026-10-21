@@ -173,6 +173,27 @@ function readMinSeq(rows: readonly { seq?: unknown }[]): number | null {
   return Number.isFinite(min) ? Math.max(0, min) : null;
 }
 
+function sortReplayDialogChronologically(
+  items: readonly HappierReplayDialogItem[],
+): HappierReplayDialogItem[] {
+  return items
+    .map((item, originalIndex) => ({ item, originalIndex }))
+    .sort((a, b) => {
+      const createdAtDelta = a.item.createdAt - b.item.createdAt;
+      if (createdAtDelta !== 0) return createdAtDelta;
+      if (
+        a.item.sessionId === b.item.sessionId
+        && typeof a.item.seq === 'number'
+        && typeof b.item.seq === 'number'
+      ) {
+        const seqDelta = a.item.seq - b.item.seq;
+        if (seqDelta !== 0) return seqDelta;
+      }
+      return a.originalIndex - b.originalIndex;
+    })
+    .map(({ item }) => item);
+}
+
 export async function hydrateReplayDialogFromForkChain(params: Readonly<{
   credentials: Credentials;
   startingSessionId: string;
@@ -630,12 +651,12 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
    * reverse IS conversation order. `createdAt` alone is not a total order: a fork
    * copies nothing, so the parent's last turn and the child's first are
    * independent writes that a busy second puts in the same millisecond. Sorting
-   * is stable, so on a tie the collection order survives — which emits the CHILD
-   * row ahead of the parent row it answered. Reversing first makes the order that
-   * survives a tie the walk's own, so equal timestamps fall back to
-   * parent-before-child and oldest-before-newest.
+   * by time alone would otherwise preserve that CHILD-first collection order.
+   * Reversing first makes the final fallback the walk's own conversation order:
+   * equal timestamps use seq only inside one Session, then parent-before-child
+   * and oldest-before-newest survive through the original-index tie-breaker.
    */
-  const dialog = [...accepted].reverse().sort((a, b) => a.createdAt - b.createdAt);
+  let dialog = sortReplayDialogChronologically([...accepted].reverse());
   let discussionTurnsTruncated = false;
   if (params.includeDiscussionRunTurns === true) {
     const loaded = await loadDiscussionTurnsFromSession({
@@ -659,10 +680,7 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
           : `${turn.label} answered: ${turn.text}`,
       });
     }
-    dialog.sort((a, b) => {
-      if (typeof a.seq === 'number' && typeof b.seq === 'number') return a.seq - b.seq;
-      return a.createdAt - b.createdAt;
-    });
+    dialog = sortReplayDialogChronologically(dialog);
   }
   return {
     dialog,

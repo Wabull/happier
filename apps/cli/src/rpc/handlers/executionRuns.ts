@@ -277,6 +277,12 @@ export function registerExecutionRunHandlers(
         return { ok: false, error: 'Unsupported runClass', errorCode: 'execution_run_not_allowed' };
       }
     }
+    if (
+      parsed.data.intent === 'discussion'
+      && (parsed.data.ioMode !== 'request_response' || parsed.data.runClass !== 'bounded')
+    ) {
+      return { ok: false, error: 'Unsupported discussion run shape', errorCode: 'execution_run_not_allowed' };
+    }
 
     const parentRunId = typeof (raw as any)?.parentRunId === 'string' ? String((raw as any).parentRunId).trim() : '';
     const parentCallId = typeof (raw as any)?.parentCallId === 'string' ? String((raw as any).parentCallId).trim() : '';
@@ -378,9 +384,6 @@ export function registerExecutionRunHandlers(
         }
       }
       if (parsed.data.intent === 'discussion') {
-        if (parsed.data.ioMode !== 'request_response' || parsed.data.runClass !== 'bounded') {
-          return { ok: false, error: 'Unsupported discussion run shape', errorCode: 'execution_run_not_allowed' };
-        }
         startParams.notifyParentOnCompletion = false;
         const credentials = await readCredentials().catch(() => null);
         if (credentials && ctx.sessionId) {
