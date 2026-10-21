@@ -98,12 +98,12 @@ export function applySharedChatV1(metadata: Metadata, config: SharedChatConfig |
 }
 
 /** The single writer: patches the marker (and optionally the title) through the session metadata path. */
-export async function writeSharedChatV1(sessionId: string, config: SharedChatConfig | null, options?: Readonly<{ title?: string }>): Promise<void> {
+export async function writeSharedChatV1(sessionId: string, config: SharedChatConfig | null, options?: Readonly<{ title?: string; serverId?: string | null }>): Promise<void> {
     const title = options?.title?.trim() ?? '';
     await getSyncSingleton().patchSessionMetadataWithRetry(sessionId, (metadata: Metadata) => {
         const next = applySharedChatV1(metadata, config);
         return title ? { ...next, summary: { text: title, updatedAt: Date.now() } } : next;
-    });
+    }, { serverId: options?.serverId ?? null });
 }
 
 /**
@@ -118,14 +118,15 @@ export async function createSharedChatSession(sourceSessionId: string, title: st
     const directory = typeof metadata?.path === 'string' ? metadata.path : '';
     if (!machineId || !directory) throw new Error('This session has no machine or folder to start a shared chat from.');
     const agentId = resolveAgentIdFromFlavor((metadata as { flavor?: string | null } | null)?.flavor ?? null) ?? DEFAULT_BACKEND_ID;
+    const serverId = resolvePreferredServerIdForSessionId(sourceSessionId) ?? null;
     const result = await machineSpawnNewSession({
         machineId,
         directory,
         backendTarget: { kind: 'builtInAgent', agentId },
-        serverId: resolvePreferredServerIdForSessionId(sourceSessionId) ?? null,
+        serverId,
     });
     if (result.type === 'error') throw new Error(result.errorMessage);
     if (result.type !== 'success' || !result.sessionId) return null;
-    await writeSharedChatV1(result.sessionId, defaultSharedChatConfig(result.sessionId), { title });
+    await writeSharedChatV1(result.sessionId, defaultSharedChatConfig(result.sessionId), { title, serverId });
     return result.sessionId;
 }

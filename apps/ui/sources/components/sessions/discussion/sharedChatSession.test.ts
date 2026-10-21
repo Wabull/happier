@@ -1,6 +1,51 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { applySharedChatV1, readSharedChatV1 } from './sharedChatSession';
+const sessionState = vi.hoisted(() => ({
+    sessions: {
+        source: {
+            id: 'source',
+            serverId: 'server-source',
+            metadata: { machineId: 'machine-1', path: '/repo', flavor: 'claude' },
+        },
+    } as Record<string, any>,
+}));
+const machineSpawnNewSessionMock = vi.hoisted(() => vi.fn(async () => ({
+    type: 'success' as const,
+    sessionId: 'spawned',
+})));
+const patchSessionMetadataWithRetryMock = vi.hoisted(() => vi.fn(async (
+    _sessionId: string,
+    updater: (metadata: Record<string, unknown>) => Record<string, unknown>,
+) => {
+    updater({});
+}));
+
+vi.mock('@/sync/domains/state/storage', () => ({
+    storage: {
+        getState: () => ({
+            sessions: sessionState.sessions,
+            sessionListViewDataByServerId: {},
+        }),
+    },
+}));
+vi.mock('@/sync/domains/server/serverRuntime', () => ({
+    getActiveServerSnapshot: () => ({ serverId: 'server-active' }),
+}));
+vi.mock('@/sync/ops/machines', () => ({
+    machineSpawnNewSession: machineSpawnNewSessionMock,
+}));
+vi.mock('@/sync/runtime/getSyncSingleton', () => ({
+    getSyncSingleton: () => ({
+        patchSessionMetadataWithRetry: patchSessionMetadataWithRetryMock,
+    }),
+}));
+
+import { applySharedChatV1, createSharedChatSession, readSharedChatV1 } from './sharedChatSession';
+
+beforeEach(() => {
+    machineSpawnNewSessionMock.mockClear();
+    patchSessionMetadataWithRetryMock.mockClear();
+});
 
 describe('readSharedChatV1', () => {
     it('treats missing, malformed or other versions as a normal session', () => {
@@ -64,5 +109,24 @@ describe('applySharedChatV1', () => {
         const next = applySharedChatV1({ path: '/p', sharedChatV1: { v: 1, groupId: 'g' } } as any, null);
         expect(next).not.toHaveProperty('sharedChatV1');
         expect(next).toMatchObject({ path: '/p' });
+    });
+});
+
+describe('createSharedChatSession', () => {
+    it('writes the spawned marker through the source server even before the spawned session is cached', async () => {
+        expect(sessionState.sessions.spawned).toBeUndefined();
+
+        await expect(createSharedChatSession('source', 'Design review')).resolves.toBe('spawned');
+
+        expect(machineSpawnNewSessionMock).toHaveBeenCalledWith(expect.objectContaining({
+            machineId: 'machine-1',
+            directory: '/repo',
+            serverId: 'server-source',
+        }));
+        expect(patchSessionMetadataWithRetryMock).toHaveBeenCalledWith(
+            'spawned',
+            expect.any(Function),
+            { serverId: 'server-source' },
+        );
     });
 });
