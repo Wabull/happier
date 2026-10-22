@@ -3,6 +3,7 @@ import { tryResolveDecryptedTranscriptPayload } from '@/session/services/transcr
 import { isAuthenticationError } from '@/api/client/httpStatusError';
 
 import { fetchEncryptedTranscriptMessagesPage } from './fetchEncryptedTranscriptMessages';
+import { sortReplayDialogChronologically } from './sortReplayDialogChronologically';
 
 export type DiscussionTurn = Readonly<{
   label: string;
@@ -99,11 +100,7 @@ export function selectDiscussionTurns(bodies: readonly unknown[]): DiscussionTur
       createdAt: result.createdAt || call.createdAt,
     });
   }
-  turns.sort((a, b) => {
-    if (a.seq !== null && b.seq !== null) return a.seq - b.seq;
-    return a.createdAt - b.createdAt;
-  });
-  return turns;
+  return sortReplayDialogChronologically(turns);
 }
 
 function resolveDecryptedBody(params: Readonly<{

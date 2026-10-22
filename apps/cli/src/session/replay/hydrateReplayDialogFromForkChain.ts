@@ -15,6 +15,7 @@ import { fetchLatestMemorySynopsisSystemRecord } from '@/session/systemRecords/m
 import { readMemorySynopsisPointerV1FromSessionMetadata } from '@/session/memoryArtifacts/memorySynopsisPointerV1';
 
 import type { HappierReplayDialogItem } from './types';
+import { sortReplayDialogChronologically } from './sortReplayDialogChronologically';
 import { fetchEncryptedTranscriptMessagesPage } from './fetchEncryptedTranscriptMessages';
 import { decryptTranscriptReplaySlice } from './decryptTranscriptReplaySlice';
 import { loadDiscussionTurnsFromSession } from './selectDiscussionRunTurns';
@@ -171,27 +172,6 @@ function readMinSeq(rows: readonly { seq?: unknown }[]): number | null {
     min = Math.min(min, Math.floor(seq));
   }
   return Number.isFinite(min) ? Math.max(0, min) : null;
-}
-
-function sortReplayDialogChronologically(
-  items: readonly HappierReplayDialogItem[],
-): HappierReplayDialogItem[] {
-  return items
-    .map((item, originalIndex) => ({ item, originalIndex }))
-    .sort((a, b) => {
-      const createdAtDelta = a.item.createdAt - b.item.createdAt;
-      if (createdAtDelta !== 0) return createdAtDelta;
-      if (
-        a.item.sessionId === b.item.sessionId
-        && typeof a.item.seq === 'number'
-        && typeof b.item.seq === 'number'
-      ) {
-        const seqDelta = a.item.seq - b.item.seq;
-        if (seqDelta !== 0) return seqDelta;
-      }
-      return a.originalIndex - b.originalIndex;
-    })
-    .map(({ item }) => item);
 }
 
 export async function hydrateReplayDialogFromForkChain(params: Readonly<{
@@ -652,9 +632,10 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
    * copies nothing, so the parent's last turn and the child's first are
    * independent writes that a busy second puts in the same millisecond. Sorting
    * by time alone would otherwise preserve that CHILD-first collection order.
-   * Reversing first makes the final fallback the walk's own conversation order:
-   * equal timestamps use seq only inside one Session, then parent-before-child
-   * and oldest-before-newest survive through the original-index tie-breaker.
+   * Reversing first makes the final fallback the walk's own conversation order.
+   * Sequence breaks a tie only when the whole timestamp bucket is one Session
+   * and every item carries seq; incomplete or mixed-Session buckets retain
+   * parent-before-child and oldest-before-newest through original position.
    */
   let dialog = sortReplayDialogChronologically([...accepted].reverse());
   let discussionTurnsTruncated = false;

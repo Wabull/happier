@@ -5,6 +5,7 @@ import type { TranscriptRawRow } from '../services/transcript/semanticTranscript
 import { tryResolveDecryptedTranscriptPayload } from '../services/transcript/transcriptHistoryRows';
 import type { SessionEncryptionContext } from '../transport/encryption/sessionEncryptionContext';
 import type { HappierReplayDialogItem } from './types';
+import { sortReplayDialogChronologically } from './sortReplayDialogChronologically';
 
 type RawTranscriptRow = Readonly<{
   seq?: unknown;
@@ -150,11 +151,8 @@ export function decryptTranscriptReplayCore(params: Readonly<{
     }
   }
 
-  out.sort((a, b) => {
-    if (a.seq !== null && b.seq !== null) return a.seq - b.seq;
-    return a.createdAt - b.createdAt;
-  });
-  const bounded = out.length > maxDialogItems ? out.slice(out.length - maxDialogItems) : out;
+  const sorted = sortReplayDialogChronologically(out);
+  const bounded = sorted.length > maxDialogItems ? sorted.slice(sorted.length - maxDialogItems) : sorted;
 
   return {
     // The row seq is carried, not dropped: it is the anchor the replay seed
