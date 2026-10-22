@@ -18,7 +18,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         padding: 12,
     },
     sectionLabel: {
-        ...Typography.eyebrow(),
+        ...Typography.compactLabel('strong'),
         color: theme.colors.text.secondary,
     },
     row: {
@@ -38,7 +38,7 @@ const stylesheet = StyleSheet.create((theme) => ({
         backgroundColor: theme.colors.surface.inset,
     },
     optionText: {
-        ...Typography.rowTitle(),
+        ...Typography.compactBody(),
         color: theme.colors.text.primary,
     },
     modeOption: {
@@ -50,11 +50,11 @@ const stylesheet = StyleSheet.create((theme) => ({
         gap: 2,
     },
     help: {
-        ...Typography.rowMeta(),
+        ...Typography.compactLabel(),
         color: theme.colors.text.secondary,
     },
     input: {
-        ...Typography.rowTitle(),
+        ...Typography.compactBody(),
         color: theme.colors.text.primary,
         borderWidth: 1,
         borderColor: theme.colors.border.default,

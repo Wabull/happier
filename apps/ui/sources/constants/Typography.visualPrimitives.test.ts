@@ -23,6 +23,18 @@ describe('Typography visual primitive helpers', () => {
         expect(Number(meta.lineHeight)).toBeGreaterThanOrEqual(Number(meta.fontSize));
     });
 
+    it('exposes compact control text without adding vertical or tracking metrics', () => {
+        expect(Typography.compactBody()).toMatchObject({ fontSize: 13 });
+        expect(Typography.compactLabel()).toMatchObject({ fontSize: 12 });
+        expect(Typography.compactLabel('strong')).toMatchObject({ fontSize: 12, fontWeight: '600' });
+
+        for (const style of [Typography.compactBody(), Typography.compactLabel(), Typography.compactLabel('strong')]) {
+            expect(style).not.toHaveProperty('lineHeight');
+            expect(style).not.toHaveProperty('letterSpacing');
+            expect(style).not.toHaveProperty('textTransform');
+        }
+    });
+
     it('exposes compact pill and key-hint label helpers', () => {
         const pillLabel = Typography.pillLabel();
         const keyHint = Typography.keyHint();

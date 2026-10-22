@@ -2007,8 +2007,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.text.primary,
   },
   sharedChatAttribution: {
-    ...Typography.rowMeta(),
-    ...Typography.default('semiBold'),
+    ...Typography.compactLabel('strong'),
     marginTop: 8,
     marginBottom: 2,
     marginLeft: 2,

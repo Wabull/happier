@@ -175,6 +175,23 @@ function rowMetaTypography(): Pick<TextStyle, 'fontFamily' | 'fontSize' | 'lineH
     };
 }
 
+function compactBodyTypography(): Pick<TextStyle, 'fontFamily' | 'fontSize'> {
+    return {
+        ...defaultTypography('regular'),
+        fontSize: 13,
+    };
+}
+
+function compactLabelTypography(
+    weight: 'regular' | 'strong' = 'regular',
+): Pick<TextStyle, 'fontFamily' | 'fontWeight' | 'fontSize'> {
+    return {
+        ...defaultTypography('regular'),
+        ...(weight === 'strong' ? { fontWeight: FontWeights.bold } : {}),
+        fontSize: 12,
+    };
+}
+
 function pillLabelTypography(): Pick<TextStyle, 'fontFamily' | 'fontWeight' | 'fontSize' | 'lineHeight' | 'letterSpacing'> {
     return {
         ...defaultTypography('semiBold'),
@@ -220,6 +237,10 @@ export const Typography = {
     // Standard two-tier row rhythm (non-editable typography primitives)
     rowTitle: rowTitleTypography,
     rowMeta: rowMetaTypography,
+
+    // Dense controls whose established metrics intentionally omit line height and tracking
+    compactBody: compactBodyTypography,
+    compactLabel: compactLabelTypography,
 
     // Compact labels for badges, pills, and keyboard hints
     pillLabel: pillLabelTypography,
