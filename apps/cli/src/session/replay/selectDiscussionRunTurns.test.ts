@@ -28,6 +28,26 @@ function acpRow(seq: number, data: Record<string, unknown>) {
   return { seq, createdAt: seq, messageRole: 'event', content: { t: 'plain', v: { role: 'agent', content: { type: 'acp', data } } } };
 }
 
+function observedAcpRow(
+  seq: number,
+  data: Record<string, unknown>,
+  onPayloadRead: (seq: number) => void,
+) {
+  const payload = { role: 'agent', content: { type: 'acp', data } };
+  return {
+    seq,
+    createdAt: seq,
+    messageRole: 'event',
+    content: {
+      t: 'plain',
+      get v() {
+        onPayloadRead(seq);
+        return payload;
+      },
+    },
+  };
+}
+
 describe('selectDiscussionTurns', () => {
   beforeEach(() => {
     storedRows.splice(0, storedRows.length);
@@ -157,6 +177,58 @@ describe('selectDiscussionTurns', () => {
       truncated: false,
       requestsUsed: 2,
     });
+  });
+
+  it('reads each ordinary multi-page row once while preserving cross-page pairing', async () => {
+    const payloadReads = new Map<number, number>();
+    const observePayloadRead = (seq: number) => {
+      payloadReads.set(seq, (payloadReads.get(seq) ?? 0) + 1);
+    };
+    queuedPages.push(
+      {
+        messages: [observedAcpRow(3, { type: 'tool-result', callId: 'call-a', output: { value: 'ZEBRA4817' } }, observePayloadRead)],
+        hasMore: true,
+        nextBeforeSeq: 3,
+      },
+      {
+        messages: [observedAcpRow(2, {
+          type: 'tool-result',
+          callId: 'call-bash',
+          output: { value: 'not a discussion answer', _happier: { canonicalToolName: 'Bash' } },
+        }, observePayloadRead)],
+        hasMore: true,
+        nextBeforeSeq: 2,
+      },
+      {
+        messages: [observedAcpRow(1, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'call-a',
+          input: { intent: 'discussion', display: { participantLabel: 'A' }, instructions: 'Pick a codeword.' },
+        }, observePayloadRead)],
+        hasMore: false,
+        nextBeforeSeq: null,
+      },
+    );
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 1,
+      maxRequests: 3,
+      deadlineAtMs: Date.now() + 10_000,
+    });
+
+    expect(loaded).toEqual({
+      turns: [expect.objectContaining({ callId: 'call-a', text: 'ZEBRA4817' })],
+      truncated: false,
+      requestsUsed: 3,
+    });
+    expect(payloadReads).toEqual(new Map([
+      [3, 1],
+      [2, 1],
+      [1, 1],
+    ]));
   });
 
   it('keeps a completion after the checkpoint when its call is on the same page before the checkpoint', async () => {

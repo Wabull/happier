@@ -1466,7 +1466,7 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
     });
 
     expect(messageRequests.filter((request) => request.roles === 'event')).toHaveLength(0);
-    expect(result?.dialog.map((item) => item.text)).not.toContain(expect.stringContaining('SHOULD_NOT_LOAD'));
+    expect(result?.dialog.some((item) => item.text.includes('SHOULD_NOT_LOAD'))).toBe(false);
     expect(result?.discussionTurnsTruncated).toBe(true);
   });
 

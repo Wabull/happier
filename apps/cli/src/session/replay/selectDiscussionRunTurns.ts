@@ -238,13 +238,16 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
       if (upToSeqInclusive !== null && row.seq > upToSeqInclusive) return false;
       return true;
     }));
-    selection = selectDiscussionTurnsFromTranscriptRowsWithDiagnostics({
-      rows,
-      ...(params.encryptionKey ? { encryptionKey: params.encryptionKey } : {}),
-      ...(params.encryptionVariant ? { encryptionVariant: params.encryptionVariant } : {}),
-    });
-    const hasUnresolvedAfterCheckpoint = [...selection.unresolvedResultSeqs.values()]
-      .some((seq) => afterSeqExclusive === null || seq === null || seq > afterSeqExclusive);
+    let hasUnresolvedAfterCheckpoint = false;
+    if (afterSeqExclusive !== null) {
+      selection = selectDiscussionTurnsFromTranscriptRowsWithDiagnostics({
+        rows,
+        ...(params.encryptionKey ? { encryptionKey: params.encryptionKey } : {}),
+        ...(params.encryptionVariant ? { encryptionVariant: params.encryptionVariant } : {}),
+      });
+      hasUnresolvedAfterCheckpoint = [...selection.unresolvedResultSeqs.values()]
+        .some((seq) => seq === null || seq > afterSeqExclusive);
+    }
     if (!page.hasMore) {
       if (afterSeqExclusive !== null && hasUnresolvedAfterCheckpoint) truncated = true;
       break;
@@ -263,6 +266,14 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
       truncated = true;
       break;
     }
+  }
+
+  if (afterSeqExclusive === null) {
+    selection = selectDiscussionTurnsFromTranscriptRowsWithDiagnostics({
+      rows,
+      ...(params.encryptionKey ? { encryptionKey: params.encryptionKey } : {}),
+      ...(params.encryptionVariant ? { encryptionVariant: params.encryptionVariant } : {}),
+    });
   }
 
   return {
