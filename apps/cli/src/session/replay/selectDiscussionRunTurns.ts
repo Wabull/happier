@@ -21,6 +21,18 @@ type TurnCall = Readonly<{
   createdAt: number;
 }>;
 
+type TurnResult = Readonly<{
+  text: string;
+  seq: number | null;
+  createdAt: number;
+  mayNeedCallRecovery: boolean;
+}>;
+
+type DiscussionTurnSelection = Readonly<{
+  turns: DiscussionTurn[];
+  unresolvedResultSeqs: ReadonlyMap<string, number | null>;
+}>;
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
@@ -55,13 +67,19 @@ function readOutputText(output: unknown): string {
   return readText(record.value) || readText(record.summary) || readText(record.text) || readText(record.output);
 }
 
-/**
- * Selects committed discussion-run rows out of transcript or ACP bodies.
- * Other tool traffic stays out of the seed.
- */
-export function selectDiscussionTurns(bodies: readonly unknown[]): DiscussionTurn[] {
+function resultMayNeedCallRecovery(data: Record<string, unknown>): boolean {
+  const output = asRecord(data.output);
+  const happier = asRecord(output?._happier);
+  const toolName = readText(data.name) || readText(data.toolName) || readText(happier?.canonicalToolName);
+  // An explicitly different tool is irrelevant. An unlabelled result still needs its
+  // call to establish whether it belongs to a discussion run.
+  return !toolName || toolName === 'SubAgentRun';
+}
+
+function selectDiscussionTurnsWithDiagnostics(bodies: readonly unknown[]): DiscussionTurnSelection {
+  const observedCallIds = new Set<string>();
   const calls = new Map<string, TurnCall>();
-  const results = new Map<string, { text: string; seq: number | null; createdAt: number }>();
+  const results = new Map<string, TurnResult>();
 
   for (const body of bodies) {
     const record = asRecord(body);
@@ -73,6 +91,7 @@ export function selectDiscussionTurns(bodies: readonly unknown[]): DiscussionTur
     const createdAt = typeof record?.createdAt === 'number' && Number.isFinite(record.createdAt) ? record.createdAt : 0;
     const type = data.type;
     if (type === 'tool-call') {
+      observedCallIds.add(callId);
       if (readText(data.name) !== 'SubAgentRun') continue;
       const input = asRecord(data.input);
       if (readText(input?.intent) !== 'discussion') continue;
@@ -84,7 +103,7 @@ export function selectDiscussionTurns(bodies: readonly unknown[]): DiscussionTur
     }
     const text = readOutputText(data.output);
     if (!text) continue;
-    results.set(callId, { text, seq, createdAt });
+    results.set(callId, { text, seq, createdAt, mayNeedCallRecovery: resultMayNeedCallRecovery(data) });
   }
 
   const turns: DiscussionTurn[] = [];
@@ -100,7 +119,23 @@ export function selectDiscussionTurns(bodies: readonly unknown[]): DiscussionTur
       createdAt: result.createdAt || call.createdAt,
     });
   }
-  return sortReplayDialogChronologically(turns);
+
+  return {
+    turns: sortReplayDialogChronologically(turns),
+    unresolvedResultSeqs: new Map(
+      [...results]
+        .filter(([callId, result]) => result.mayNeedCallRecovery && !observedCallIds.has(callId))
+        .map(([callId, result]) => [callId, result.seq] as const),
+    ),
+  };
+}
+
+/**
+ * Selects committed discussion-run rows out of transcript or ACP bodies.
+ * Other tool traffic stays out of the seed.
+ */
+export function selectDiscussionTurns(bodies: readonly unknown[]): DiscussionTurn[] {
+  return selectDiscussionTurnsWithDiagnostics(bodies).turns;
 }
 
 function resolveDecryptedBody(params: Readonly<{
@@ -123,6 +158,14 @@ export function selectDiscussionTurnsFromTranscriptRows(params: Readonly<{
   encryptionKey?: Uint8Array | null;
   encryptionVariant?: SessionEncryptionContext['encryptionVariant'];
 }>): DiscussionTurn[] {
+  return selectDiscussionTurnsFromTranscriptRowsWithDiagnostics(params).turns;
+}
+
+function selectDiscussionTurnsFromTranscriptRowsWithDiagnostics(params: Readonly<{
+  rows: readonly Readonly<{ seq?: unknown; createdAt?: unknown; content?: unknown }>[];
+  encryptionKey?: Uint8Array | null;
+  encryptionVariant?: SessionEncryptionContext['encryptionVariant'];
+}>): DiscussionTurnSelection {
   const bodies = params.rows.flatMap((row) => {
     const decrypted = resolveDecryptedBody({
       row,
@@ -136,7 +179,7 @@ export function selectDiscussionTurnsFromTranscriptRows(params: Readonly<{
       createdAt: row.createdAt,
     }];
   });
-  return selectDiscussionTurns(bodies);
+  return selectDiscussionTurnsWithDiagnostics(bodies);
 }
 
 export async function loadDiscussionTurnsFromSession(params: Readonly<{
@@ -168,6 +211,7 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
     : undefined;
   let requests = 0;
   let truncated = params.maxRequests <= 0 || Date.now() >= params.deadlineAtMs;
+  let selection: DiscussionTurnSelection = { turns: [], unresolvedResultSeqs: new Map() };
 
   if (upToSeqInclusive !== null && afterSeqExclusive !== null && upToSeqInclusive <= afterSeqExclusive) {
     return { turns: [], truncated: false, requestsUsed: 0 };
@@ -192,15 +236,29 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
     rows.push(...page.messages.filter((row) => {
       if (typeof row.seq !== 'number' || !Number.isSafeInteger(row.seq)) return false;
       if (upToSeqInclusive !== null && row.seq > upToSeqInclusive) return false;
-      return afterSeqExclusive === null || row.seq > afterSeqExclusive;
+      return true;
     }));
-    if (!page.hasMore) break;
+    selection = selectDiscussionTurnsFromTranscriptRowsWithDiagnostics({
+      rows,
+      ...(params.encryptionKey ? { encryptionKey: params.encryptionKey } : {}),
+      ...(params.encryptionVariant ? { encryptionVariant: params.encryptionVariant } : {}),
+    });
+    const hasUnresolvedAfterCheckpoint = [...selection.unresolvedResultSeqs.values()]
+      .some((seq) => afterSeqExclusive === null || seq === null || seq > afterSeqExclusive);
+    if (!page.hasMore) {
+      if (afterSeqExclusive !== null && hasUnresolvedAfterCheckpoint) truncated = true;
+      break;
+    }
     if (page.nextBeforeSeq === null || (typeof beforeSeq === 'number' && page.nextBeforeSeq >= beforeSeq)) {
       truncated = true;
       break;
     }
     beforeSeq = page.nextBeforeSeq;
-    if (afterSeqExclusive !== null && beforeSeq <= afterSeqExclusive + 1) break;
+    if (
+      afterSeqExclusive !== null
+      && beforeSeq <= afterSeqExclusive + 1
+      && !hasUnresolvedAfterCheckpoint
+    ) break;
     if (requests >= params.maxRequests || Date.now() >= params.deadlineAtMs) {
       truncated = true;
       break;
@@ -208,11 +266,7 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
   }
 
   return {
-    turns: selectDiscussionTurnsFromTranscriptRows({
-      rows,
-      ...(params.encryptionKey ? { encryptionKey: params.encryptionKey } : {}),
-      ...(params.encryptionVariant ? { encryptionVariant: params.encryptionVariant } : {}),
-    }),
+    turns: selection.turns.filter((turn) => afterSeqExclusive === null || (turn.seq !== null && turn.seq > afterSeqExclusive)),
     truncated,
     requestsUsed: requests,
   };

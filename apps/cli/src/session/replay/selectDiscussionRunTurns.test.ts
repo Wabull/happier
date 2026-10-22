@@ -159,6 +159,154 @@ describe('selectDiscussionTurns', () => {
     });
   });
 
+  it('keeps a completion after the checkpoint when its call is on the same page before the checkpoint', async () => {
+    queuedPages.push({
+      messages: [
+        acpRow(12, { type: 'tool-result', callId: 'call-a', output: { value: 'ZEBRA4817' } }),
+        acpRow(10, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'call-a',
+          input: { intent: 'discussion', display: { participantLabel: 'A' }, instructions: 'Pick a codeword.' },
+        }),
+      ],
+      hasMore: false,
+      nextBeforeSeq: null,
+    });
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 50,
+      maxRequests: 1,
+      deadlineAtMs: Date.now() + 10_000,
+      afterSeqExclusive: 11,
+    });
+
+    expect(loaded).toEqual({
+      turns: [expect.objectContaining({ callId: 'call-a', seq: 12, text: 'ZEBRA4817' })],
+      truncated: false,
+      requestsUsed: 1,
+    });
+  });
+
+  it('recovers a pre-checkpoint call from another page for a post-checkpoint completion', async () => {
+    queuedPages.push(
+      {
+        messages: [acpRow(12, {
+          type: 'tool-result',
+          callId: 'call-a',
+          output: { value: 'ZEBRA4817', _happier: { canonicalToolName: 'SubAgentRun' } },
+        })],
+        hasMore: true,
+        nextBeforeSeq: 12,
+      },
+      {
+        messages: [acpRow(10, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'call-a',
+          input: { intent: 'discussion', display: { participantLabel: 'A' }, instructions: 'Pick a codeword.' },
+        })],
+        hasMore: true,
+        nextBeforeSeq: 10,
+      },
+    );
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 1,
+      maxRequests: 2,
+      deadlineAtMs: Date.now() + 10_000,
+      afterSeqExclusive: 11,
+    });
+
+    expect(loaded).toEqual({
+      turns: [expect.objectContaining({ callId: 'call-a', seq: 12, text: 'ZEBRA4817' })],
+      truncated: false,
+      requestsUsed: 2,
+    });
+  });
+
+  it('reports incomplete when the shared request bound prevents prerequisite call recovery', async () => {
+    queuedPages.push(
+      {
+        messages: [acpRow(12, { type: 'tool-result', callId: 'call-a', output: { value: 'ZEBRA4817' } })],
+        hasMore: true,
+        nextBeforeSeq: 12,
+      },
+      {
+        messages: [acpRow(10, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'call-a',
+          input: { intent: 'discussion', display: { participantLabel: 'A' }, instructions: 'Pick a codeword.' },
+        })],
+        hasMore: false,
+        nextBeforeSeq: null,
+      },
+    );
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 1,
+      maxRequests: 1,
+      deadlineAtMs: Date.now() + 10_000,
+      afterSeqExclusive: 11,
+    });
+
+    expect(loaded).toEqual({ turns: [], truncated: true, requestsUsed: 1 });
+    expect(queuedPages).toHaveLength(1);
+  });
+
+  it('reports incomplete when a post-checkpoint result cannot be paired after normal exhaustion', async () => {
+    queuedPages.push({
+      messages: [acpRow(12, {
+        type: 'tool-result',
+        callId: 'call-a',
+        output: { value: 'ZEBRA4817', _happier: { canonicalToolName: 'SubAgentRun' } },
+      })],
+      hasMore: false,
+      nextBeforeSeq: null,
+    });
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 50,
+      maxRequests: 1,
+      deadlineAtMs: Date.now() + 10_000,
+      afterSeqExclusive: 11,
+    });
+
+    expect(loaded).toEqual({ turns: [], truncated: true, requestsUsed: 1 });
+  });
+
+  it('does not chase an explicitly different tool result below the checkpoint', async () => {
+    queuedPages.push({
+      messages: [acpRow(12, {
+        type: 'tool-result',
+        callId: 'call-bash',
+        output: { value: 'not a discussion answer', _happier: { canonicalToolName: 'Bash' } },
+      })],
+      hasMore: true,
+      nextBeforeSeq: 12,
+    });
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 1,
+      maxRequests: 1,
+      deadlineAtMs: Date.now() + 10_000,
+      afterSeqExclusive: 11,
+    });
+
+    expect(loaded).toEqual({ turns: [], truncated: false, requestsUsed: 1 });
+  });
+
   it('pairs rows already fetched before the request budget truncates pagination', async () => {
     queuedPages.push(
       {
