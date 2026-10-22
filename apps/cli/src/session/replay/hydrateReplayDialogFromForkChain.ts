@@ -640,26 +640,44 @@ export async function hydrateReplayDialogFromForkChain(params: Readonly<{
   let dialog = sortReplayDialogChronologically([...accepted].reverse());
   let discussionTurnsTruncated = false;
   if (params.includeDiscussionRunTurns === true) {
-    const loaded = await loadDiscussionTurnsFromSession({
-      token: params.credentials.token,
-      sessionId: params.startingSessionId,
-      limit: pageSize,
-      maxRequests,
-      deadlineAtMs,
-      ...(startingCtx?.encryptionKey ? { encryptionKey: startingCtx.encryptionKey } : {}),
-      ...(startingCtx?.encryptionVariant ? { encryptionVariant: startingCtx.encryptionVariant } : {}),
-    });
-    discussionTurnsTruncated = loaded.truncated;
-    for (const turn of loaded.turns) {
-      dialog.push({
-        role: 'Assistant',
-        createdAt: turn.createdAt,
-        seq: turn.seq,
-        sessionId: params.startingSessionId,
-        text: turn.question
-          ? `User asked ${turn.label}: ${turn.question}\n\n${turn.label} answered: ${turn.text}`
-          : `${turn.label} answered: ${turn.text}`,
+    for (const segment of segments) {
+      const ctx = segment === startingSegment ? startingCtx : openSegment(segment);
+      if ((segment.rawSession as any)?.encryptionMode !== 'plain' && !ctx) {
+        discussionTurnsTruncated = true;
+        continue;
+      }
+      const sessionSeq =
+        typeof (segment.rawSession as any)?.seq === 'number' && Number.isFinite((segment.rawSession as any).seq)
+          ? Math.max(0, Math.floor((segment.rawSession as any).seq))
+          : 0;
+      const cutoff =
+        typeof segment.upToSeqInclusive === 'number' && Number.isFinite(segment.upToSeqInclusive)
+          ? Math.max(0, Math.floor(segment.upToSeqInclusive))
+          : sessionSeq;
+      const loaded = await loadDiscussionTurnsFromSession({
+        token: params.credentials.token,
+        sessionId: segment.sessionId,
+        limit: pageSize,
+        maxRequests: Math.max(0, maxRequests - requestsUsed),
+        deadlineAtMs,
+        upToSeqInclusive: cutoff,
+        ...(segment === startingSegment && afterSeqExclusive !== null ? { afterSeqExclusive } : {}),
+        ...(ctx?.encryptionKey ? { encryptionKey: ctx.encryptionKey } : {}),
+        ...(ctx?.encryptionVariant ? { encryptionVariant: ctx.encryptionVariant } : {}),
       });
+      requestsUsed += loaded.requestsUsed;
+      discussionTurnsTruncated = discussionTurnsTruncated || loaded.truncated;
+      for (const turn of loaded.turns) {
+        dialog.push({
+          role: 'Assistant',
+          createdAt: turn.createdAt,
+          seq: turn.seq,
+          sessionId: segment.sessionId,
+          text: turn.question
+            ? `User asked ${turn.label}: ${turn.question}\n\n${turn.label} answered: ${turn.text}`
+            : `${turn.label} answered: ${turn.text}`,
+        });
+      }
     }
     dialog = sortReplayDialogChronologically(dialog);
   }

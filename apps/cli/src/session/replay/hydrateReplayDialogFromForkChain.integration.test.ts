@@ -1057,6 +1057,7 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
      * than the absence of a route.
      */
     parentSessionId?: string;
+    parentSession?: Record<string, unknown>;
     parentRows?: readonly Row[];
     includeDiscussionRunTurns?: boolean;
     /** Fail every transcript page request after this many have succeeded. */
@@ -1064,6 +1065,7 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
   }>) {
     const requests: Array<{ roles: string | null; beforeSeq: number | null; afterSeq: number | null; limit: number }> = [];
     const parentRequests: Array<'session' | 'messages'> = [];
+    const parentMessageRequests: Array<{ roles: string | null; beforeSeq: number | null; limit: number }> = [];
     const sorted = [...params.rows].sort((a, b) => a.seq - b.seq);
     const parentSorted = [...(params.parentRows ?? [])].sort((a, b) => b.seq - a.seq);
 
@@ -1084,6 +1086,7 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
             ...sessionRow(),
             id: params.parentSessionId,
             metadata: JSON.stringify({ flavor: 'claude', path: '/tmp' }),
+            ...(params.parentSession ?? {}),
           },
         }));
         return;
@@ -1091,12 +1094,23 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
       if (params.parentSessionId && url.pathname === `/v1/sessions/${params.parentSessionId}/messages`) {
         if (respondTranscriptMessagesQueryRejection(url.searchParams, res)) return;
         parentRequests.push('messages');
+        const rolesRaw = url.searchParams.get('roles');
+        const beforeSeqRaw = url.searchParams.get('beforeSeq');
+        const limit = Number.parseInt(url.searchParams.get('limit') ?? '150', 10);
+        const beforeSeq = beforeSeqRaw ? Number.parseInt(beforeSeqRaw, 10) : null;
+        parentMessageRequests.push({ roles: rolesRaw, beforeSeq, limit });
+        const requested = rolesRaw ? rolesRaw.split(',') : null;
+        const eligible = parentSorted
+          .filter((row) => (beforeSeq === null ? true : row.seq < beforeSeq))
+          .filter((row) => (params.honorRoles === false || !requested ? true : requested.includes(row.messageRole)));
+        const picked = eligible.slice(0, limit);
+        const hasMore = eligible.length > picked.length;
         res.statusCode = 200;
         res.setHeader('content-type', 'application/json');
         res.end(JSON.stringify({
-          messages: parentSorted,
-          hasMore: false,
-          nextBeforeSeq: null,
+          messages: picked,
+          hasMore,
+          nextBeforeSeq: hasMore && picked.length > 0 ? picked[picked.length - 1]!.seq : null,
           nextAfterSeq: null,
         }));
         return;
@@ -1164,7 +1178,7 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
       ...(params.afterSeqExclusive === undefined ? {} : { afterSeqExclusive: params.afterSeqExclusive }),
       ...(params.includeDiscussionRunTurns === true ? { includeDiscussionRunTurns: true } : {}),
     });
-    return { result, requests, messageRequests: requests, parentRequests };
+    return { result, requests, messageRequests: requests, parentRequests, parentMessageRequests };
   }
 
   it('asks the server for conversational roles only, so tool and thinking rows never pay for the window', async () => {
@@ -1407,6 +1421,126 @@ describe('hydrateReplayDialogFromForkChain — character-budget window', () => {
     });
 
     expect(result?.dialog.map((item) => item.text)).toEqual(['parent turn', 'child turn']);
+  });
+
+  it('shares the transcript request budget with discussion loading', async () => {
+    const { result, messageRequests } = await run({
+      rows: [
+        textRow(1, 'user', 'the source ask'),
+        {
+          seq: 2,
+          createdAt: 1_002,
+          messageRole: 'event',
+          content: {
+            t: 'plain',
+            v: {
+              role: 'agent',
+              content: {
+                type: 'acp',
+                data: {
+                  type: 'tool-call',
+                  name: 'SubAgentRun',
+                  callId: 'child-budget-call',
+                  input: { intent: 'discussion', display: { participantLabel: 'A' }, instructions: 'answer?' },
+                },
+              },
+            },
+          },
+        },
+        {
+          seq: 3,
+          createdAt: 1_003,
+          messageRole: 'event',
+          content: {
+            t: 'plain',
+            v: {
+              role: 'agent',
+              content: { type: 'acp', data: { type: 'tool-result', callId: 'child-budget-call', output: 'SHOULD_NOT_LOAD' } },
+            },
+          },
+        },
+      ],
+      includeDiscussionRunTurns: true,
+      charBudget: 100_000,
+      env: { HAPPIER_REPLAY_SEED_MAX_TRANSCRIPT_REQUESTS: '1' },
+    });
+
+    expect(messageRequests.filter((request) => request.roles === 'event')).toHaveLength(0);
+    expect(result?.dialog.map((item) => item.text)).not.toContain(expect.stringContaining('SHOULD_NOT_LOAD'));
+    expect(result?.discussionTurnsTruncated).toBe(true);
+  });
+
+  it('loads eligible encrypted parent discussion turns with parent identity and fork cutoff', async () => {
+    const { encodeBase64, encryptLegacy } = await import('@/api/encryption');
+    const secret = new Uint8Array(32).fill(1);
+    const encryptedEventRow = (seq: number, createdAt: number, data: Record<string, unknown>): Row => ({
+      seq,
+      createdAt,
+      messageRole: 'event',
+      content: {
+        t: 'encrypted',
+        c: encodeBase64(encryptLegacy({ role: 'agent', content: { type: 'acp', data } }, secret)),
+      },
+    });
+    const plainEventRow = (seq: number, createdAt: number, data: Record<string, unknown>): Row => ({
+      seq,
+      createdAt,
+      messageRole: 'event',
+      content: { t: 'plain', v: { role: 'agent', content: { type: 'acp', data } } },
+    });
+
+    const parentSessionId = 'sess_window_parent';
+    const { result, parentMessageRequests } = await run({
+      rows: [
+        plainEventRow(1, 2_001, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'child-call',
+          input: { intent: 'discussion', display: { participantLabel: 'Child' }, instructions: 'child question' },
+        }),
+        plainEventRow(2, 2_002, { type: 'tool-result', callId: 'child-call', output: 'CHILD_ANSWER' }),
+      ],
+      parentSessionId,
+      parentSession: {
+        seq: 6,
+        encryptionMode: 'e2ee',
+        metadata: encodeBase64(encryptLegacy({ flavor: 'claude', path: '/tmp' }, secret)),
+        dataEncryptionKey: null,
+      },
+      parentRows: [
+        encryptedEventRow(1, 1_001, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'parent-call',
+          input: { intent: 'discussion', display: { participantLabel: 'Parent' }, instructions: 'parent question' },
+        }),
+        encryptedEventRow(2, 1_002, { type: 'tool-result', callId: 'parent-call', output: 'PARENT_BEFORE_CUTOFF' }),
+        encryptedEventRow(5, 3_001, {
+          type: 'tool-call',
+          name: 'SubAgentRun',
+          callId: 'late-parent-call',
+          input: { intent: 'discussion', display: { participantLabel: 'Late' }, instructions: 'late question' },
+        }),
+        encryptedEventRow(6, 3_002, { type: 'tool-result', callId: 'late-parent-call', output: 'PARENT_AFTER_CUTOFF' }),
+      ],
+      includeDiscussionRunTurns: true,
+      session: {
+        metadata: JSON.stringify({
+          flavor: 'claude',
+          path: '/tmp',
+          forkV1: { v: 1, parentSessionId, parentCutoffSeqInclusive: 4 },
+        }),
+      },
+      charBudget: 100_000,
+    });
+
+    expect(parentMessageRequests).toContainEqual(expect.objectContaining({ roles: 'event', beforeSeq: 5 }));
+    expect(result?.dialog.map((item) => ({ text: item.text, sessionId: item.sessionId }))).toEqual([
+      { text: 'User asked Parent: parent question\n\nParent answered: PARENT_BEFORE_CUTOFF', sessionId: parentSessionId },
+      { text: 'User asked Child: child question\n\nChild answered: CHILD_ANSWER', sessionId: SESSION_ID },
+    ]);
+    expect(result?.dialog.some((item) => item.text.includes('PARENT_AFTER_CUTOFF'))).toBe(false);
+    expect(result?.discussionTurnsTruncated).toBe(false);
   });
 
   it('uses same-session seq to order rows with equal timestamps', async () => {

@@ -145,13 +145,33 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
   limit: number;
   maxRequests: number;
   deadlineAtMs: number;
+  upToSeqInclusive?: number;
+  afterSeqExclusive?: number;
   encryptionKey?: Uint8Array | null;
   encryptionVariant?: SessionEncryptionContext['encryptionVariant'];
-}>): Promise<Readonly<{ turns: DiscussionTurn[]; truncated: boolean }>> {
+}>): Promise<Readonly<{ turns: DiscussionTurn[]; truncated: boolean; requestsUsed: number }>> {
   const rows: Array<Readonly<{ seq?: unknown; createdAt?: unknown; content?: unknown }>> = [];
-  let beforeSeq: number | undefined;
+  const upToSeqInclusive =
+    typeof params.upToSeqInclusive === 'number'
+      && Number.isSafeInteger(params.upToSeqInclusive)
+      && params.upToSeqInclusive >= 0
+      ? params.upToSeqInclusive
+      : null;
+  const afterSeqExclusive =
+    typeof params.afterSeqExclusive === 'number'
+      && Number.isSafeInteger(params.afterSeqExclusive)
+      && params.afterSeqExclusive >= 0
+      ? params.afterSeqExclusive
+      : null;
+  let beforeSeq = upToSeqInclusive !== null && upToSeqInclusive < Number.MAX_SAFE_INTEGER
+    ? upToSeqInclusive + 1
+    : undefined;
   let requests = 0;
-  let truncated = false;
+  let truncated = params.maxRequests <= 0 || Date.now() >= params.deadlineAtMs;
+
+  if (upToSeqInclusive !== null && afterSeqExclusive !== null && upToSeqInclusive <= afterSeqExclusive) {
+    return { turns: [], truncated: false, requestsUsed: 0 };
+  }
 
   while (requests < params.maxRequests && Date.now() < params.deadlineAtMs) {
     requests += 1;
@@ -169,13 +189,18 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
       truncated = true;
       break;
     }
-    rows.push(...page.messages);
+    rows.push(...page.messages.filter((row) => {
+      if (typeof row.seq !== 'number' || !Number.isSafeInteger(row.seq)) return false;
+      if (upToSeqInclusive !== null && row.seq > upToSeqInclusive) return false;
+      return afterSeqExclusive === null || row.seq > afterSeqExclusive;
+    }));
     if (!page.hasMore) break;
     if (page.nextBeforeSeq === null || (typeof beforeSeq === 'number' && page.nextBeforeSeq >= beforeSeq)) {
       truncated = true;
       break;
     }
     beforeSeq = page.nextBeforeSeq;
+    if (afterSeqExclusive !== null && beforeSeq <= afterSeqExclusive + 1) break;
     if (requests >= params.maxRequests || Date.now() >= params.deadlineAtMs) {
       truncated = true;
       break;
@@ -189,5 +214,6 @@ export async function loadDiscussionTurnsFromSession(params: Readonly<{
       ...(params.encryptionVariant ? { encryptionVariant: params.encryptionVariant } : {}),
     }),
     truncated,
+    requestsUsed: requests,
   };
 }

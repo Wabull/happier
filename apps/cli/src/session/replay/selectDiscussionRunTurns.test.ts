@@ -93,6 +93,38 @@ describe('selectDiscussionTurns', () => {
     ]);
   });
 
+  it.each([
+    ['the request budget is already exhausted', { maxRequests: 0, deadlineAtMs: Date.now() + 10_000 }],
+    ['the shared deadline has already expired', { maxRequests: 1, deadlineAtMs: Date.now() - 1 }],
+  ])('marks history truncated before the first fetch when %s', async (_label, bound) => {
+    queuedPages.push({ messages: [], hasMore: false, nextBeforeSeq: null });
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 50,
+      ...bound,
+    });
+
+    expect(loaded).toEqual({ turns: [], truncated: true, requestsUsed: 0 });
+    expect(queuedPages).toHaveLength(1);
+  });
+
+  it('keeps a normally exhausted empty event history complete', async () => {
+    queuedPages.push({ messages: [], hasMore: false, nextBeforeSeq: null });
+
+    const loaded = await loadDiscussionTurnsFromSession({
+      token: 'token',
+      sessionId: 'session-1',
+      limit: 50,
+      maxRequests: 1,
+      deadlineAtMs: Date.now() + 10_000,
+    });
+
+    expect(loaded).toEqual({ turns: [], truncated: false, requestsUsed: 1 });
+    expect(queuedPages).toHaveLength(0);
+  });
+
   it('pairs a discussion call and result fetched on different transcript pages', async () => {
     queuedPages.push(
       {
@@ -123,6 +155,7 @@ describe('selectDiscussionTurns', () => {
     expect(loaded).toEqual({
       turns: [expect.objectContaining({ label: 'A', question: 'Pick a codeword.', text: 'ZEBRA4817' })],
       truncated: false,
+      requestsUsed: 2,
     });
   });
 
@@ -177,6 +210,6 @@ describe('selectDiscussionTurns', () => {
       deadlineAtMs: Date.now() + 10_000,
     });
 
-    expect(loaded).toEqual({ turns: [], truncated: true });
+    expect(loaded).toEqual({ turns: [], truncated: true, requestsUsed: 2 });
   });
 });
