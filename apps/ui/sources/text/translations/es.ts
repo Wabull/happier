@@ -679,6 +679,12 @@ export const es: TranslationStructure = {
                 changed: 'El mensaje de origen cambió. Usa el texto capturado o vuelve a seleccionar.',
                 unavailable: 'El mensaje de origen ya no está disponible en esta sesión.',
             },
+            addRefused: {
+                inactive: 'Abre el compositor de esta sesión y vuelve a añadir la anotación.',
+                viewOnly: 'Solo tienes acceso de lectura, así que no puedes añadir nada al mensaje de esta sesión.',
+                locked: 'Desbloquea esta sesión cifrada antes de añadir la anotación.',
+                editingQueuedMessage: 'Termina o cancela la edición del mensaje en cola y luego añade la anotación.',
+            },
         },
 
     selection: {

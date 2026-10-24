@@ -728,6 +728,12 @@ export const pt: TranslationStructure = {
                 changed: 'A mensagem de origem mudou. Use o texto capturado ou selecione novamente.',
                 unavailable: 'A mensagem de origem não está mais disponível nesta sessão.',
             },
+            addRefused: {
+                inactive: 'Abra o compositor desta sessão e adicione a anotação novamente.',
+                viewOnly: 'Você tem acesso somente leitura, então não pode adicionar nada à mensagem desta sessão.',
+                locked: 'Desbloqueie esta sessão criptografada antes de adicionar a anotação.',
+                editingQueuedMessage: 'Conclua ou cancele a edição da mensagem na fila e depois adicione a anotação.',
+            },
         },
 
     selection: {

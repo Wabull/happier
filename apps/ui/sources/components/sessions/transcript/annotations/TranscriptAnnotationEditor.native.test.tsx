@@ -51,7 +51,7 @@ describe('TranscriptAnnotationEditor native source selection', () => {
 
     it('requires explicit captured-text confirmation after a source change and adds once', async () => {
         const { TranscriptAnnotationEditor } = await import('./TranscriptAnnotationEditor');
-        const onAdd = vi.fn(() => true);
+        const onAdd = vi.fn(() => ({ ok: true }) as const);
         const screen = await renderScreen(
             <TranscriptAnnotationEditor
                 sourceText="original text"
@@ -83,7 +83,7 @@ describe('TranscriptAnnotationEditor native source selection', () => {
 
     it('cancels without adding or changing the captured source', async () => {
         const { TranscriptAnnotationEditor } = await import('./TranscriptAnnotationEditor');
-        const onAdd = vi.fn(() => true);
+        const onAdd = vi.fn(() => ({ ok: true }) as const);
         const onCancel = vi.fn();
         const screen = await renderScreen(
             <TranscriptAnnotationEditor
@@ -102,4 +102,35 @@ describe('TranscriptAnnotationEditor native source selection', () => {
         expect(onCancel).toHaveBeenCalledTimes(1);
         expect(onAdd).not.toHaveBeenCalled();
     });
+
+    it.each(['inactive', 'viewOnly', 'locked', 'editingQueuedMessage'] as const)(
+        'explains a %s refusal and keeps the note for retry',
+        async (reason) => {
+            const { TranscriptAnnotationEditor } = await import('./TranscriptAnnotationEditor');
+            const onAdd = vi.fn()
+                .mockReturnValueOnce({ ok: false, reason })
+                .mockReturnValueOnce({ ok: true });
+            const screen = await renderScreen(
+                <TranscriptAnnotationEditor
+                    sourceText="keep this"
+                    initialSelection={{ start: 0, end: 4, text: 'keep', basis: 'source-editor' }}
+                    sourceState="current"
+                    onAdd={onAdd}
+                    onCancel={vi.fn()}
+                />,
+            );
+            const note = screen.findByProps({ testID: 'transcript-annotation-note-input' });
+            await act(async () => note.props.onChangeText('Still mine'));
+            await act(async () => pressTestInstance(screen.findByProps({ testID: 'transcript-annotation-add' }), 'Add'));
+
+            const refusal = screen.findByProps({ testID: 'transcript-annotation-add-refused' });
+            expect(refusal.props.children).toBe(`transcript.annotation.addRefused.${reason}`);
+            expect(screen.findByProps({ testID: 'transcript-annotation-note-input' }).props.value).toBe('Still mine');
+
+            await act(async () => pressTestInstance(screen.findByProps({ testID: 'transcript-annotation-add' }), 'Retry'));
+            expect(onAdd).toHaveBeenCalledTimes(2);
+            expect(onAdd).toHaveBeenLastCalledWith({ start: 0, end: 4, text: 'keep', basis: 'source-editor' }, 'Still mine');
+        },
+    );
 });
+

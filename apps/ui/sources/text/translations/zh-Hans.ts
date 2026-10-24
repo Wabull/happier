@@ -677,6 +677,12 @@ export const zhHans: TranslationStructure = {
         changed: '源消息已更改。请使用已捕获文本或重新选择。',
         unavailable: '此会话中已无法使用源消息。',
       },
+      addRefused: {
+        inactive: '请打开此会话的输入框，然后再次添加批注。',
+        viewOnly: '你只有查看权限，无法向此会话的消息添加内容。',
+        locked: '请先解锁此加密会话，再添加批注。',
+        editingQueuedMessage: '请先完成或取消编辑排队中的消息，再添加批注。',
+      },
     },
 
     selection: {

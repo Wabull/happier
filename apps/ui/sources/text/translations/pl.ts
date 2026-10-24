@@ -690,6 +690,12 @@ export const pl: TranslationStructure = {
                 changed: 'Wiadomość źródłowa się zmieniła. Użyj przechwyconego tekstu lub zaznacz ponownie.',
                 unavailable: 'Wiadomość źródłowa nie jest już dostępna w tej sesji.',
             },
+            addRefused: {
+                inactive: 'Otwórz edytor wiadomości tej sesji, a następnie dodaj adnotację ponownie.',
+                viewOnly: 'Masz dostęp tylko do odczytu, więc nie możesz dodać niczego do wiadomości w tej sesji.',
+                locked: 'Odblokuj tę zaszyfrowaną sesję przed dodaniem adnotacji.',
+                editingQueuedMessage: 'Zakończ lub anuluj edycję wiadomości w kolejce, a następnie dodaj adnotację.',
+            },
         },
 
     selection: {

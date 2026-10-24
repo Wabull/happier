@@ -669,6 +669,12 @@ export const ca: TranslationStructure = {
                 changed: 'El missatge d’origen ha canviat. Utilitza el text capturat o torna a seleccionar.',
                 unavailable: 'El missatge d’origen ja no està disponible en aquesta sessió.',
             },
+            addRefused: {
+                inactive: 'Obre el compositor d’aquesta sessió i torna a afegir l’anotació.',
+                viewOnly: 'Només tens accés de lectura, així que no pots afegir res al missatge d’aquesta sessió.',
+                locked: 'Desbloqueja aquesta sessió xifrada abans d’afegir l’anotació.',
+                editingQueuedMessage: 'Acaba o cancel·la l’edició del missatge en cua i després afegeix l’anotació.',
+            },
         },
         selection: {
             enterA11y: 'Entra al mode de selecció',

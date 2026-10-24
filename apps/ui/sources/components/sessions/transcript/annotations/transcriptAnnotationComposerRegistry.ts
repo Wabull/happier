@@ -1,11 +1,11 @@
 import * as React from 'react';
 
-import type { TranscriptAnnotationSource } from './transcriptAnnotationModel';
+import type { TranscriptAnnotationAppendResult, TranscriptAnnotationSource } from './transcriptAnnotationModel';
 
 export type TranscriptAnnotationComposerController = Readonly<{
     sessionId: string;
     isSourceCurrent: (source: TranscriptAnnotationSource) => boolean | null;
-    appendAnnotation: (annotationBlock: string) => boolean;
+    appendAnnotation: (annotationBlock: string) => TranscriptAnnotationAppendResult;
 }>;
 
 type Registration = Readonly<{ token: symbol; controller: TranscriptAnnotationComposerController }>;

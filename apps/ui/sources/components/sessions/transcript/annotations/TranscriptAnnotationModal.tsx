@@ -39,10 +39,10 @@ export function TranscriptAnnotationModal(props: TranscriptAnnotationModalProps)
                 onCancel={props.onClose}
                 onAdd={(selection, note) => {
                     const active = getTranscriptAnnotationComposer(props.source.sessionId);
-                    if (!active) return false;
-                    const added = active.appendAnnotation(buildTranscriptAnnotationBlock({ source: props.source, selection, note }));
-                    if (added) props.onClose();
-                    return added;
+                    if (!active) return { ok: false, reason: 'inactive' };
+                    const result = active.appendAnnotation(buildTranscriptAnnotationBlock({ source: props.source, selection, note }));
+                    if (result.ok) props.onClose();
+                    return result;
                 }}
             />
         </View>

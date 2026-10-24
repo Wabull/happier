@@ -7,6 +7,8 @@ import { t } from '@/text';
 
 import {
     isTranscriptAnnotationSelectionValid,
+    type TranscriptAnnotationAppendRefusal,
+    type TranscriptAnnotationAppendResult,
     type TranscriptAnnotationSelection,
 } from './transcriptAnnotationModel';
 
@@ -16,7 +18,7 @@ type TranscriptAnnotationEditorProps = Readonly<{
     sourceText: string;
     initialSelection: TranscriptAnnotationSelection | null;
     sourceState: TranscriptAnnotationSourceState;
-    onAdd: (selection: TranscriptAnnotationSelection, note: string) => boolean;
+    onAdd: (selection: TranscriptAnnotationSelection, note: string) => TranscriptAnnotationAppendResult;
     onCancel: () => void;
 }>;
 
@@ -98,6 +100,7 @@ export function TranscriptAnnotationEditor(props: TranscriptAnnotationEditorProp
     const [editingNote, setEditingNote] = React.useState(props.initialSelection != null);
     const [note, setNote] = React.useState('');
     const [useCapturedSource, setUseCapturedSource] = React.useState(false);
+    const [addRefusal, setAddRefusal] = React.useState<TranscriptAnnotationAppendRefusal | null>(null);
     const submittedRef = React.useRef(false);
 
     React.useEffect(() => {
@@ -154,6 +157,11 @@ export function TranscriptAnnotationEditor(props: TranscriptAnnotationEditorProp
                         placeholderTextColor={theme.colors.input.placeholder}
                         style={styles.noteInput}
                     />
+                    {addRefusal ? (
+                        <Text accessibilityRole="alert" style={styles.warning} testID="transcript-annotation-add-refused">
+                            {t(`transcript.annotation.addRefused.${addRefusal}`)}
+                        </Text>
+                    ) : null}
                     <View style={styles.actions}>
                         <EditorButton title={t('common.cancel')} testID="transcript-annotation-cancel" onPress={props.onCancel} />
                         <EditorButton
@@ -164,8 +172,11 @@ export function TranscriptAnnotationEditor(props: TranscriptAnnotationEditorProp
                             onPress={() => {
                                 if (!canAdd || !selection || submittedRef.current) return;
                                 submittedRef.current = true;
-                                const added = props.onAdd(selection, note);
-                                if (!added) submittedRef.current = false;
+                                const result = props.onAdd(selection, note);
+                                if (!result.ok) {
+                                    submittedRef.current = false;
+                                    setAddRefusal(result.reason);
+                                }
                             }}
                         />
                     </View>

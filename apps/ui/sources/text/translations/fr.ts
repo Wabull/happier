@@ -495,6 +495,12 @@ export const fr: TranslationStructure = {
                 changed: 'Le message source a changé. Utilise le texte capturé ou resélectionne.',
                 unavailable: 'Le message source n’est plus disponible dans cette session.',
             },
+            addRefused: {
+                inactive: 'Ouvre le compositeur de cette session, puis ajoute à nouveau l’annotation.',
+                viewOnly: 'Tu as un accès en lecture seule, tu ne peux donc rien ajouter au message de cette session.',
+                locked: 'Déverrouille cette session chiffrée avant d’ajouter l’annotation.',
+                editingQueuedMessage: 'Termine ou annule la modification du message en file d’attente, puis ajoute l’annotation.',
+            },
         },
         selection: {
             enterA11y: 'Activer le mode sélection',

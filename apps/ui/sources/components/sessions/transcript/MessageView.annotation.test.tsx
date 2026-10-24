@@ -92,7 +92,7 @@ async function renderMessage(message: UserTextMessage | AgentTextMessage) {
     const { MessageViewWithSessionCommon } = await import('./MessageView');
     const { TranscriptAnnotationProvider } = await import('./annotations/TranscriptAnnotationContext');
     return renderScreen(
-        <TranscriptAnnotationProvider sessionId="s1" appendAnnotation={() => true}>
+        <TranscriptAnnotationProvider sessionId="s1" appendAnnotation={() => ({ ok: true })}>
             <MessageViewWithSessionCommon
                 sessionId="s1"
                 metadata={null}

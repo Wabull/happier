@@ -493,6 +493,12 @@ export const en = {
                 changed: 'The source message changed. Use the captured text or reselect.',
                 unavailable: 'The source message is no longer available in this session.',
             },
+            addRefused: {
+                inactive: 'Open this session’s composer, then add the annotation again.',
+                viewOnly: 'You have view-only access, so you can’t add to this session’s message.',
+                locked: 'Unlock this encrypted session before adding the annotation.',
+                editingQueuedMessage: 'Finish or cancel editing the queued message, then add the annotation.',
+            },
         },
         selection: {
             enterA11y: 'Enter selection mode',

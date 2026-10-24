@@ -5,6 +5,7 @@ import {
     buildTranscriptAnnotationBlock,
     isTranscriptAnnotationSelectionValid,
     isTranscriptAnnotationSourceCurrent,
+    resolveTranscriptAnnotationAppendRefusal,
 } from './transcriptAnnotationModel';
 
 describe('transcriptAnnotationModel', () => {
@@ -65,5 +66,14 @@ describe('transcriptAnnotationModel', () => {
         expect(isTranscriptAnnotationSelectionValid(text, { start: 1, end: 3 })).toBe(true);
         expect(isTranscriptAnnotationSelectionValid(text, { start: 1, end: 2 })).toBe(false);
         expect(isTranscriptAnnotationSelectionValid(text, { start: 2, end: 3 })).toBe(false);
+    });
+
+    it('names every composer refusal cause instead of refusing silently', () => {
+        const allowed = { surfaceFocused: true, viewOnly: false, encryptedSessionLocked: false, pendingMessageEditActive: false };
+        expect(resolveTranscriptAnnotationAppendRefusal(allowed)).toBeNull();
+        expect(resolveTranscriptAnnotationAppendRefusal({ ...allowed, surfaceFocused: false })).toBe('inactive');
+        expect(resolveTranscriptAnnotationAppendRefusal({ ...allowed, viewOnly: true })).toBe('viewOnly');
+        expect(resolveTranscriptAnnotationAppendRefusal({ ...allowed, encryptedSessionLocked: true })).toBe('locked');
+        expect(resolveTranscriptAnnotationAppendRefusal({ ...allowed, pendingMessageEditActive: true })).toBe('editingQueuedMessage');
     });
 });

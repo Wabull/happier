@@ -172,8 +172,7 @@ test.describe('ui e2e: transcript annotation', () => {
         await expect(sourceComposer).toBeEnabled({ timeout: 180_000 });
         await sourceComposer.fill(sourcePrompt);
         await sourceComposer.press('Enter');
-        await expect(page.getByText(fakeClaudeEchoResponseText(sourcePrompt))).toHaveCount(1, { timeout: 180_000 });
-        await page.reload({ waitUntil: 'domcontentloaded' });
+        // No reload: the freshly committed turn must be annotatable in the live projection.
         await expect(page.getByText(fakeClaudeEchoResponseText(sourcePrompt))).toHaveCount(1, { timeout: 180_000 });
 
         const sourceWrapper = page.locator('[data-testid^="transcript-message-"]').filter({ hasText: sourcePrompt }).first();
@@ -208,6 +207,38 @@ test.describe('ui e2e: transcript annotation', () => {
         await expect(composer).toHaveValue(new RegExp(`Selection basis: rendered-text\nSelection range: ${secondRepeatStart}-${secondRepeatStart + 'repeat'.length}\n`));
         await expect(sourceWrapper).toContainText(sourcePrompt);
         // Add only edits the draft: nothing reaches the provider before explicit Send.
+        expect(await hasProviderEntry(providerLogPath, '## Transcript annotation')).toBe(false);
+
+        // Assistant block via the source-picker fallback: Annotate with no live selection.
+        const assistantText = fakeClaudeEchoResponseText(sourcePrompt);
+        const assistantWrapper = page.locator('[data-testid^="transcript-message-"]').filter({ hasText: assistantText }).first();
+        await page.evaluate(() => window.getSelection()?.removeAllRanges());
+        await assistantWrapper.hover();
+        const assistantAnnotate = assistantWrapper.locator('[data-testid^="transcript-message-annotate:"]').first();
+        await expect(assistantAnnotate).toBeVisible();
+        await assistantAnnotate.click();
+        const sourcePicker = page.getByTestId('transcript-annotation-source-input');
+        await expect(sourcePicker).toHaveValue(assistantText);
+        // Diagnostic only: record whether keyboard selection in the read-only picker reaches the editor.
+        await sourcePicker.focus();
+        await sourcePicker.press('Control+Home');
+        for (let index = 0; index < 'FAKE_CLAUDE'.length; index += 1) await sourcePicker.press('Shift+ArrowRight');
+        const keyboardSelection = await sourcePicker.evaluate((element) => {
+            const input = element as HTMLTextAreaElement;
+            return { start: input.selectionStart, end: input.selectionEnd };
+        });
+        const useSelection = page.getByTestId('transcript-annotation-use-selection');
+        console.log(`[annotation-e2e] keyboard-source-selection ${JSON.stringify({ ...keyboardSelection, useSelectionEnabled: await useSelection.isEnabled() })}`);
+        // Mouse gesture: double-click selects the single marker word, i.e. the whole assistant text.
+        await sourcePicker.dblclick();
+        await expect(sourcePicker).toHaveValue(assistantText);
+        await useSelection.click();
+        await expect(page.getByTestId('transcript-annotation-quote-preview')).toHaveText(assistantText);
+        await page.getByTestId('transcript-annotation-note-input').fill('Name the assistant marker.');
+        await page.getByTestId('transcript-annotation-add').click();
+        await expect(page.getByTestId('transcript-annotation-modal')).toHaveCount(0);
+        await expect(composer).toHaveValue(new RegExp(`Source role: assistant[\\s\\S]*Selection basis: source-editor\\nSelection range: 0-${assistantText.length}\\n[\\s\\S]*\\n${assistantText}\\n[\\s\\S]*Name the assistant marker\\.$`));
+        await expect(composer).toHaveValue(new RegExp(`^${existingDraft}\n\n## Transcript annotation`));
         expect(await hasProviderEntry(providerLogPath, '## Transcript annotation')).toBe(false);
         await page.screenshot({ path: testInfo.outputPath('annotation-composer.png'), fullPage: true });
 

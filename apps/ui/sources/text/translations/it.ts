@@ -677,6 +677,12 @@ export const it: TranslationStructure = {
                 changed: 'Il messaggio sorgente è cambiato. Usa il testo acquisito o riseleziona.',
                 unavailable: 'Il messaggio sorgente non è più disponibile in questa sessione.',
             },
+            addRefused: {
+                inactive: 'Apri il compositore di questa sessione, poi aggiungi di nuovo l’annotazione.',
+                viewOnly: 'Hai solo accesso in lettura, quindi non puoi aggiungere nulla al messaggio di questa sessione.',
+                locked: 'Sblocca questa sessione crittografata prima di aggiungere l’annotazione.',
+                editingQueuedMessage: 'Termina o annulla la modifica del messaggio in coda, poi aggiungi l’annotazione.',
+            },
         },
 
     selection: {

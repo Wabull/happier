@@ -495,6 +495,12 @@ export const de: TranslationStructure = {
                 changed: 'Die Quellnachricht wurde geändert. Verwende den erfassten Text oder wähle neu aus.',
                 unavailable: 'Die Quellnachricht ist in dieser Sitzung nicht mehr verfügbar.',
             },
+            addRefused: {
+                inactive: 'Öffne den Composer dieser Sitzung und füge die Anmerkung erneut hinzu.',
+                viewOnly: 'Du hast nur Lesezugriff und kannst der Nachricht dieser Sitzung nichts hinzufügen.',
+                locked: 'Entsperre diese verschlüsselte Sitzung, bevor du die Anmerkung hinzufügst.',
+                editingQueuedMessage: 'Beende oder verwirf die Bearbeitung der wartenden Nachricht und füge dann die Anmerkung hinzu.',
+            },
         },
         selection: {
             enterA11y: 'Auswahlmodus starten',

@@ -23,7 +23,7 @@ describe('TranscriptAnnotationProvider', () => {
 
     it('keeps one controller registration while message snapshots update', async () => {
         const { TranscriptAnnotationProvider } = await import('./TranscriptAnnotationContext');
-        const appendAnnotation = vi.fn(() => true);
+        const appendAnnotation = vi.fn(() => ({ ok: true }) as const);
         let tree!: renderer.ReactTestRenderer;
         await act(async () => {
             tree = renderer.create(

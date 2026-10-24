@@ -773,6 +773,12 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
                 changed: '來源訊息已變更。請使用已擷取文字或重新選取。',
                 unavailable: '此工作階段中已無法使用來源訊息。',
             },
+            addRefused: {
+                inactive: '請開啟此工作階段的輸入框，然後再次新增註解。',
+                viewOnly: '你只有檢視權限，無法在此工作階段的訊息中新增內容。',
+                locked: '請先解鎖此加密工作階段，再新增註解。',
+                editingQueuedMessage: '請先完成或取消編輯佇列中的訊息，再新增註解。',
+            },
         },
 
       selection: {

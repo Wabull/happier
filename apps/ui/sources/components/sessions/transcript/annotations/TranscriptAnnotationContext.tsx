@@ -1,6 +1,10 @@
 import * as React from 'react';
 
-import type { TranscriptAnnotationSelection, TranscriptAnnotationSource } from './transcriptAnnotationModel';
+import type {
+    TranscriptAnnotationAppendResult,
+    TranscriptAnnotationSelection,
+    TranscriptAnnotationSource,
+} from './transcriptAnnotationModel';
 import type { TranscriptAnnotationComposerController } from './transcriptAnnotationComposerRegistry';
 import { registerTranscriptAnnotationComposer } from './transcriptAnnotationComposerRegistry';
 import { openTranscriptAnnotationModal } from './openTranscriptAnnotationModal';
@@ -21,7 +25,7 @@ const TranscriptAnnotationContext = React.createContext<TranscriptAnnotationCont
 
 export function TranscriptAnnotationProvider(props: Readonly<{
     sessionId: string;
-    appendAnnotation: (annotationBlock: string) => boolean;
+    appendAnnotation: (annotationBlock: string) => TranscriptAnnotationAppendResult;
     children: React.ReactNode;
 }>) {
     const messagesById = useSessionMessagesById(props.sessionId);

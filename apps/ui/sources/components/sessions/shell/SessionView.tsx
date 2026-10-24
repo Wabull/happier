@@ -67,7 +67,11 @@ import { TranscriptFirstPaintPlaceholder } from '@/components/sessions/transcrip
 import { TranscriptMessageSelectionProvider } from '@/components/sessions/transcript/messageSelection/TranscriptMessageSelectionContext';
 import { TranscriptSelectionToolbarController } from '@/components/sessions/transcript/messageSelection/TranscriptSelectionToolbarController';
 import { TranscriptAnnotationProvider } from '@/components/sessions/transcript/annotations/TranscriptAnnotationContext';
-import { appendTranscriptAnnotationToDraft } from '@/components/sessions/transcript/annotations/transcriptAnnotationModel';
+import {
+    appendTranscriptAnnotationToDraft,
+    resolveTranscriptAnnotationAppendRefusal,
+    type TranscriptAnnotationAppendResult,
+} from '@/components/sessions/transcript/annotations/transcriptAnnotationModel';
 import type { TranscriptSelectionToolbarMessage } from '@/components/sessions/transcript/messageSelection/TranscriptSelectionToolbar';
 import { appendTranscriptSelectionToNewSessionDraft } from '@/components/sessions/transcript/messageSelection/appendTranscriptSelectionToNewSessionDraft';
 import { openTranscriptSendToSessionModal } from '@/components/sessions/transcript/messageSelection/openTranscriptSendToSessionModal';
@@ -4442,18 +4446,17 @@ function SessionViewLoaded({
         noopInputComposerRestoreTransientState,
     );
     const annotationComposerInputRef = React.useRef<MultiTextInputHandle>(null);
-    const appendTranscriptAnnotation = React.useCallback((annotationBlock: string): boolean => {
-        if (
-            !surfaceFocused
-            || session.accessLevel === 'view'
-            || isEncryptedSessionLocked
-            || pendingMessageEditRef.current != null
-        ) {
-            return false;
-        }
+    const appendTranscriptAnnotation = React.useCallback((annotationBlock: string): TranscriptAnnotationAppendResult => {
+        const refusal = resolveTranscriptAnnotationAppendRefusal({
+            surfaceFocused,
+            viewOnly: session.accessLevel === 'view',
+            encryptedSessionLocked: isEncryptedSessionLocked,
+            pendingMessageEditActive: pendingMessageEditRef.current != null,
+        });
+        if (refusal) return { ok: false, reason: refusal };
         setDraftValue((currentDraft) => appendTranscriptAnnotationToDraft(currentDraft, annotationBlock));
         setTimeout(() => annotationComposerInputRef.current?.focus(), 0);
-        return true;
+        return { ok: true };
     }, [isEncryptedSessionLocked, session.accessLevel, setDraftValue, surfaceFocused]);
     const {
         armedContinuationSubmission: liveArmedContinuationSubmission,

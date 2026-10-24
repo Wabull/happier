@@ -97,6 +97,25 @@ export function buildTranscriptAnnotationBlock(params: Readonly<{
     ].join('\n');
 }
 
+export type TranscriptAnnotationAppendRefusal = 'inactive' | 'viewOnly' | 'locked' | 'editingQueuedMessage';
+
+export type TranscriptAnnotationAppendResult =
+    | Readonly<{ ok: true }>
+    | Readonly<{ ok: false; reason: TranscriptAnnotationAppendRefusal }>;
+
+export function resolveTranscriptAnnotationAppendRefusal(state: Readonly<{
+    surfaceFocused: boolean;
+    viewOnly: boolean;
+    encryptedSessionLocked: boolean;
+    pendingMessageEditActive: boolean;
+}>): TranscriptAnnotationAppendRefusal | null {
+    if (!state.surfaceFocused) return 'inactive';
+    if (state.viewOnly) return 'viewOnly';
+    if (state.encryptedSessionLocked) return 'locked';
+    if (state.pendingMessageEditActive) return 'editingQueuedMessage';
+    return null;
+}
+
 export function appendTranscriptAnnotationToDraft(currentDraft: string, annotationBlock: string): string {
     if (currentDraft.length === 0) return annotationBlock;
     const separator = currentDraft.endsWith('\n\n') ? '' : currentDraft.endsWith('\n') ? '\n' : '\n\n';

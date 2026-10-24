@@ -48,7 +48,7 @@ describe('TranscriptAnnotationModal source currency', () => {
         const { registerTranscriptAnnotationComposer } = await import('./transcriptAnnotationComposerRegistry');
         const { TranscriptAnnotationModal } = await import('./TranscriptAnnotationModal');
         let sourceIsCurrent = true;
-        const appendAnnotation = vi.fn(() => true);
+        const appendAnnotation = vi.fn(() => ({ ok: true }) as const);
         const unregister = registerTranscriptAnnotationComposer({
             sessionId: 's1',
             appendAnnotation,
