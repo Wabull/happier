@@ -1,0 +1,58 @@
+appId: ${HAPPIER_E2E_MOBILE_APP_ID}
+---
+# Native annotation smoke for the connected-machine lane.
+# Long-pressing the frozen source editor must produce a non-empty partial
+# selection event before Use selection becomes enabled.
+- launchApp:
+    clearState: false
+
+- runFlow:
+    file: _shared/connectDevClientIfNeeded.yaml
+
+- runFlow:
+    file: _shared/gotoNewSessionComposer.yaml
+
+- tapOn:
+    id: new-session-composer-input
+- inputText: "MOBILE_ANNOTATION_SOURCE alpha repeat omega"
+- tapOn:
+    id: new-session-composer-send
+
+- extendedWaitUntil:
+    visible: "MOBILE_ANNOTATION_SOURCE alpha repeat omega"
+    timeout: 240000
+
+- extendedWaitUntil:
+    visible:
+      id: "transcript-message-annotate:.*"
+    timeout: 120000
+- tapOn:
+    id: "transcript-message-annotate:.*"
+
+- assertVisible:
+    id: transcript-annotation-editor
+- longPressOn:
+    id: transcript-annotation-source-input
+- tapOn:
+    id: transcript-annotation-use-selection
+
+- assertVisible:
+    id: transcript-annotation-quote-preview
+- tapOn:
+    id: transcript-annotation-note-input
+- inputText: "Use a more specific term here."
+- tapOn:
+    id: transcript-annotation-add
+
+- extendedWaitUntil:
+    visible: "Transcript annotation"
+    timeout: 120000
+- takeScreenshot: transcript-annotation-native-composer
+
+# Annotation insertion never submits. This explicit tap exercises the existing
+# ordinary send path after the assembled block is visible in the composer.
+- tapOn:
+    id: session-composer-send
+- extendedWaitUntil:
+    visible: "Use a more specific term here."
+    timeout: 240000

@@ -653,6 +653,23 @@ export const ca: TranslationStructure = {
     },
 
     transcript: {
+        annotation: {
+            title: 'Anota el missatge',
+            actionA11y: 'Anota el text seleccionat del missatge',
+            selectSource: 'Selecciona el text d’origen',
+            selectSourceHelp: 'Selecciona un fragment continu i tria Utilitza la selecció.',
+            useSelection: 'Utilitza la selecció',
+            quotedSource: 'Font citada — només context',
+            instructionLabel: 'La teva instrucció',
+            instructionPlaceholder: 'Descriu l’actualització que vols...',
+            addToMessage: 'Afegeix al missatge',
+            useCapturedText: 'Utilitza el text capturat',
+            reselect: 'Torna a seleccionar',
+            sourceState: {
+                changed: 'El missatge d’origen ha canviat. Utilitza el text capturat o torna a seleccionar.',
+                unavailable: 'El missatge d’origen ja no està disponible en aquesta sessió.',
+            },
+        },
         selection: {
             enterA11y: 'Entra al mode de selecció',
             exitA11y: 'Surt del mode de selecció',

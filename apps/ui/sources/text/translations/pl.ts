@@ -673,7 +673,24 @@ export const pl: TranslationStructure = {
     settings: "Ustawienia",
   },
 
-  transcript: {
+    transcript: {
+        annotation: {
+            title: 'Adnotuj wiadomość',
+            actionA11y: 'Adnotuj zaznaczony tekst wiadomości',
+            selectSource: 'Zaznacz tekst źródłowy',
+            selectSourceHelp: 'Zaznacz jeden ciągły fragment, a potem wybierz Użyj zaznaczenia.',
+            useSelection: 'Użyj zaznaczenia',
+            quotedSource: 'Cytowane źródło — tylko kontekst',
+            instructionLabel: 'Twoja instrukcja',
+            instructionPlaceholder: 'Opisz oczekiwaną zmianę...',
+            addToMessage: 'Dodaj do wiadomości',
+            useCapturedText: 'Użyj przechwyconego tekstu',
+            reselect: 'Zaznacz ponownie',
+            sourceState: {
+                changed: 'Wiadomość źródłowa się zmieniła. Użyj przechwyconego tekstu lub zaznacz ponownie.',
+                unavailable: 'Wiadomość źródłowa nie jest już dostępna w tej sesji.',
+            },
+        },
 
     selection: {
 

@@ -479,6 +479,23 @@ export const fr: TranslationStructure = {
     },
 
     transcript: {
+        annotation: {
+            title: 'Annoter le message',
+            actionA11y: 'Annoter le texte sélectionné du message',
+            selectSource: 'Sélectionner le texte source',
+            selectSourceHelp: 'Sélectionne un passage continu, puis choisis Utiliser la sélection.',
+            useSelection: 'Utiliser la sélection',
+            quotedSource: 'Source citée — contexte uniquement',
+            instructionLabel: 'Ton instruction',
+            instructionPlaceholder: 'Décris la mise à jour souhaitée...',
+            addToMessage: 'Ajouter au message',
+            useCapturedText: 'Utiliser le texte capturé',
+            reselect: 'Resélectionner',
+            sourceState: {
+                changed: 'Le message source a changé. Utilise le texte capturé ou resélectionne.',
+                unavailable: 'Le message source n’est plus disponible dans cette session.',
+            },
+        },
         selection: {
             enterA11y: 'Activer le mode sélection',
             exitA11y: 'Quitter le mode sélection',

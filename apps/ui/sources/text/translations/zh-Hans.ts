@@ -661,6 +661,23 @@ export const zhHans: TranslationStructure = {
   },
 
   transcript: {
+    annotation: {
+      title: '批注消息',
+      actionA11y: '批注所选消息文本',
+      selectSource: '选择源文本',
+      selectSourceHelp: '选择一段连续文本，然后选择“使用所选内容”。',
+      useSelection: '使用所选内容',
+      quotedSource: '引用来源 — 仅作上下文',
+      instructionLabel: '你的指示',
+      instructionPlaceholder: '描述你想要的更新...',
+      addToMessage: '添加到消息',
+      useCapturedText: '使用已捕获文本',
+      reselect: '重新选择',
+      sourceState: {
+        changed: '源消息已更改。请使用已捕获文本或重新选择。',
+        unavailable: '此会话中已无法使用源消息。',
+      },
+    },
 
     selection: {
 

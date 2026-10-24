@@ -660,7 +660,24 @@ export const it: TranslationStructure = {
     settings: "Impostazioni",
   },
 
-  transcript: {
+    transcript: {
+        annotation: {
+            title: 'Annota messaggio',
+            actionA11y: 'Annota il testo selezionato del messaggio',
+            selectSource: 'Seleziona testo sorgente',
+            selectSourceHelp: 'Seleziona un passaggio continuo, poi scegli Usa selezione.',
+            useSelection: 'Usa selezione',
+            quotedSource: 'Fonte citata — solo contesto',
+            instructionLabel: 'La tua istruzione',
+            instructionPlaceholder: 'Descrivi l’aggiornamento desiderato...',
+            addToMessage: 'Aggiungi al messaggio',
+            useCapturedText: 'Usa testo acquisito',
+            reselect: 'Riseleziona',
+            sourceState: {
+                changed: 'Il messaggio sorgente è cambiato. Usa il testo acquisito o riseleziona.',
+                unavailable: 'Il messaggio sorgente non è più disponibile in questa sessione.',
+            },
+        },
 
     selection: {
 

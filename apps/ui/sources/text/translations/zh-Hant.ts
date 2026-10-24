@@ -757,6 +757,23 @@ const zhHantOverrides: DeepPartial<TranslationStructure> = {
     },
 
     transcript: {
+        annotation: {
+            title: '註解訊息',
+            actionA11y: '註解所選訊息文字',
+            selectSource: '選取來源文字',
+            selectSourceHelp: '選取一段連續文字，然後選擇「使用所選內容」。',
+            useSelection: '使用所選內容',
+            quotedSource: '引用來源 — 僅供脈絡',
+            instructionLabel: '你的指示',
+            instructionPlaceholder: '描述你想要的更新...',
+            addToMessage: '加入訊息',
+            useCapturedText: '使用已擷取文字',
+            reselect: '重新選取',
+            sourceState: {
+                changed: '來源訊息已變更。請使用已擷取文字或重新選取。',
+                unavailable: '此工作階段中已無法使用來源訊息。',
+            },
+        },
 
       selection: {
 

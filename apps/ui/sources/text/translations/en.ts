@@ -477,6 +477,23 @@ export const en = {
     },
 
     transcript: {
+        annotation: {
+            title: 'Annotate message',
+            actionA11y: 'Annotate selected message text',
+            selectSource: 'Select source text',
+            selectSourceHelp: 'Select one continuous passage, then choose Use selection.',
+            useSelection: 'Use selection',
+            quotedSource: 'Quoted source — context only',
+            instructionLabel: 'Your instruction',
+            instructionPlaceholder: 'Describe the update you want...',
+            addToMessage: 'Add to message',
+            useCapturedText: 'Use captured text',
+            reselect: 'Reselect',
+            sourceState: {
+                changed: 'The source message changed. Use the captured text or reselect.',
+                unavailable: 'The source message is no longer available in this session.',
+            },
+        },
         selection: {
             enterA11y: 'Enter selection mode',
             exitA11y: 'Exit selection mode',

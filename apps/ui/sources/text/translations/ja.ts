@@ -645,7 +645,24 @@ export const ja: TranslationStructure = {
     settings: "設定",
   },
 
-  transcript: {
+    transcript: {
+        annotation: {
+            title: 'メッセージに注釈',
+            actionA11y: '選択したメッセージのテキストに注釈を付ける',
+            selectSource: '引用元のテキストを選択',
+            selectSourceHelp: '連続した箇所を選択して、「選択を使用」を選んでください。',
+            useSelection: '選択を使用',
+            quotedSource: '引用元 — 文脈のみ',
+            instructionLabel: '指示',
+            instructionPlaceholder: '希望する更新を説明...',
+            addToMessage: 'メッセージに追加',
+            useCapturedText: '取得済みテキストを使用',
+            reselect: '再選択',
+            sourceState: {
+                changed: '引用元のメッセージが変更されました。取得済みテキストを使うか、再選択してください。',
+                unavailable: '引用元のメッセージはこのセッションで利用できなくなりました。',
+            },
+        },
 
     selection: {
 

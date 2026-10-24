@@ -94,6 +94,8 @@ import {
 } from '@/utils/sessions/deriveTranscriptInteraction';
 import { useSessionInteractionSource } from '@/sync/domains/state/storage';
 import { Icon } from '@/components/ui/icons/Icon';
+import { TranscriptAnnotationButton } from '@/components/sessions/transcript/annotations/TranscriptAnnotationButton';
+import { buildTranscriptAnnotationSourceDescriptor } from '@/components/sessions/transcript/annotations/resolveTranscriptAnnotationSource';
 
 type StreamSegmentStateForRendering = 'streaming' | 'complete' | 'interrupted';
 const FAIL_CLOSED_TRANSCRIPT_INTERACTION = deriveTranscriptInteraction({ kind: 'public' });
@@ -612,6 +614,19 @@ function UserTextBlock(props: {
     });
     return base && unsupportedContentText != null ? { ...base, text: unsupportedContentText } : base;
   })();
+  const annotationContentRootId = `transcript-annotation-content:${props.message.id}`;
+  const annotationSource = buildTranscriptAnnotationSourceDescriptor({
+    message: props.message,
+    sessionId: props.sessionId,
+    sourceText: selectableMessage?.text ?? '',
+    eligible: selectableMessage != null
+      && !isStructuredOnly
+      && !isDiscarded
+      && !isVoiceAgentTurn
+      && unsupportedContentText == null
+      && props.historical !== true
+      && props.canSendMessages,
+  });
   const selectionEnabled = props.messageDisplayCommon.transcriptMessageSelectionEnabled === true && selectableMessage != null;
   const selectionRow = useOptionalTranscriptSelectionRow(props.message.id);
   const selectionModeActionsVisible = selectionEnabled && selectionRow.isSelectionMode;
@@ -830,7 +845,9 @@ function UserTextBlock(props: {
                 interaction={props.interaction}
                 onJumpToAnchor={handleJumpToAnchor}
               />
-              <MarkdownView codeBlockStateKey={JSON.stringify([props.sessionId, props.message.id])} markdown={renderedMarkdownText} onOptionPress={handleOptionPress} onOptionLongPress={handleOptionLongPress} onLinkPress={handleMarkdownLinkPress} selectable={true} profile="transcript" textStyle={styles.transcriptMarkdownText} />
+              <View nativeID={annotationContentRootId}>
+                <MarkdownView codeBlockStateKey={JSON.stringify([props.sessionId, props.message.id])} markdown={renderedMarkdownText} onOptionPress={handleOptionPress} onOptionLongPress={handleOptionLongPress} onLinkPress={handleMarkdownLinkPress} selectable={true} profile="transcript" textStyle={styles.transcriptMarkdownText} />
+              </View>
               {sessionMediaInlineImages.length > 0 ? (
                 <SessionMediaInlineImages
                   sessionId={props.sessionId}
@@ -909,6 +926,14 @@ function UserTextBlock(props: {
                 invertedActionsLayout={timestampPresentation.invertTimestampAndActions}
               />
             ) : null}
+            <TranscriptAnnotationButton
+              source={annotationSource}
+              contentRootId={annotationContentRootId}
+              visible={showMessageActions}
+              onHoverIn={isWeb ? () => setIsCopyButtonHovered(true) : undefined}
+              onHoverOut={isWeb ? () => setIsCopyButtonHovered(false) : undefined}
+              invertedActionsLayout={timestampPresentation.invertTimestampAndActions}
+            />
             {selectableMessage ? (
               <SelectMessageButton
                 messageId={props.message.id}
@@ -1234,6 +1259,18 @@ function AgentTextBlock(props: {
     text: markdown,
     enabled: !shouldRenderStreamingPlain,
   });
+  const annotationContentRootId = `transcript-annotation-content:${props.message.id}`;
+  const annotationSource = buildTranscriptAnnotationSourceDescriptor({
+    message: props.message,
+    sessionId: props.sessionId,
+    sourceText: selectableMessage?.text ?? '',
+    eligible: selectableMessage != null
+      && !isStructuredOnly
+      && props.message.isThinking !== true
+      && props.historical !== true
+      && !shouldRenderStreamingPlain
+      && props.canSendMessages,
+  });
 
   return (
     <View {...hoverProps}>
@@ -1339,18 +1376,20 @@ function AgentTextBlock(props: {
                   {streaming.displayText}
                 </Text>
               ) : (
-                <MarkdownView
-                  markdown={markdown}
-                  codeBlockStateKey={JSON.stringify([props.sessionId, props.message.id])}
-                  agentTexMath
-                  onOptionPress={handleOptionPress}
-                  onOptionLongPress={handleOptionLongPress}
-                  onLinkPress={handleMarkdownLinkPress}
-                  selectable={true}
-                  profile={props.message.isThinking ? 'thinking' : 'transcript'}
-                  textStyle={props.message.isThinking ? styles.thinkingMarkdownText : styles.transcriptMarkdownText}
-                  staticRenderPlaceholderEnabled={staticRenderPlaceholderEnabled}
-                />
+                <View nativeID={annotationContentRootId}>
+                  <MarkdownView
+                    markdown={markdown}
+                    codeBlockStateKey={JSON.stringify([props.sessionId, props.message.id])}
+                    agentTexMath
+                    onOptionPress={handleOptionPress}
+                    onOptionLongPress={handleOptionLongPress}
+                    onLinkPress={handleMarkdownLinkPress}
+                    selectable={true}
+                    profile={props.message.isThinking ? 'thinking' : 'transcript'}
+                    textStyle={props.message.isThinking ? styles.thinkingMarkdownText : styles.transcriptMarkdownText}
+                    staticRenderPlaceholderEnabled={staticRenderPlaceholderEnabled}
+                  />
+                </View>
               )
             )
           )
@@ -1435,6 +1474,14 @@ function AgentTextBlock(props: {
               invertedActionsLayout={timestampPresentation.invertTimestampAndActions}
             />
           ) : null}
+          <TranscriptAnnotationButton
+            source={annotationSource}
+            contentRootId={annotationContentRootId}
+            visible={showMessageActions}
+            onHoverIn={isWeb ? () => setIsCopyButtonHovered(true) : undefined}
+            onHoverOut={isWeb ? () => setIsCopyButtonHovered(false) : undefined}
+            invertedActionsLayout={timestampPresentation.invertTimestampAndActions}
+          />
           <CopyMessageButton
             markdown={copyText}
             testID={`transcript-message-copy:${props.message.id}`}

@@ -66,6 +66,8 @@ import { applyTranscriptJumpHighlightForJumpResult } from '@/components/sessions
 import { TranscriptFirstPaintPlaceholder } from '@/components/sessions/transcript/TranscriptFirstPaintPlaceholder';
 import { TranscriptMessageSelectionProvider } from '@/components/sessions/transcript/messageSelection/TranscriptMessageSelectionContext';
 import { TranscriptSelectionToolbarController } from '@/components/sessions/transcript/messageSelection/TranscriptSelectionToolbarController';
+import { TranscriptAnnotationProvider } from '@/components/sessions/transcript/annotations/TranscriptAnnotationContext';
+import { appendTranscriptAnnotationToDraft } from '@/components/sessions/transcript/annotations/transcriptAnnotationModel';
 import type { TranscriptSelectionToolbarMessage } from '@/components/sessions/transcript/messageSelection/TranscriptSelectionToolbar';
 import { appendTranscriptSelectionToNewSessionDraft } from '@/components/sessions/transcript/messageSelection/appendTranscriptSelectionToNewSessionDraft';
 import { openTranscriptSendToSessionModal } from '@/components/sessions/transcript/messageSelection/openTranscriptSendToSessionModal';
@@ -154,6 +156,7 @@ import type { SessionArmedAgentContinuationSubmission } from '@/sync/domains/inp
 import { existingSessionDraftSemanticValues } from '@/sync/domains/input/drafts/existingSessionDraftSemanticValues';
 import { areServerAccountScopesEqual, serverAccountScopeKeySuffix } from '@/sync/domains/scope/serverAccountScope';
 import type { AgentInputLocalUiStateV1 } from '@/sync/domains/input/draftValues/agentInputLocalUiStateStore';
+import type { MultiTextInputHandle } from '@/components/ui/forms/MultiTextInput';
 import { applyPermissionModeSelection } from '@/sync/domains/permissions/permissionModeApply';
 import {
     supportsSessionModeOverrides,
@@ -1152,6 +1155,7 @@ type SessionAgentInputWithUsageProps = Omit<React.ComponentProps<typeof AgentInp
     inputComposerClearTransientStateRef: React.MutableRefObject<() => void>;
     inputComposerCaptureTransientStateRef: React.MutableRefObject<() => AgentInputLocalUiStateV1 | null>;
     inputComposerRestoreTransientStateRef: React.MutableRefObject<(state: AgentInputLocalUiStateV1 | null) => void>;
+    agentInputRef: React.Ref<MultiTextInputHandle>;
 };
 
 const noopInputComposerClearTransientState = () => {};
@@ -1259,6 +1263,7 @@ const SessionAgentInputWithUsage = React.memo(function SessionAgentInputWithUsag
     inputComposerClearTransientStateRef,
     inputComposerCaptureTransientStateRef,
     inputComposerRestoreTransientStateRef,
+    agentInputRef,
     ...agentInputProps
 }: SessionAgentInputWithUsageProps) {
     const value = useComposerTextValue(composerTextStore);
@@ -1343,6 +1348,7 @@ const SessionAgentInputWithUsage = React.memo(function SessionAgentInputWithUsag
 
     return (
         <AgentInput
+            ref={agentInputRef}
             {...agentInputProps}
             value={value}
             sessionId={sessionId}
@@ -4435,6 +4441,20 @@ function SessionViewLoaded({
     const inputComposerRestoreTransientStateRef = React.useRef<(state: AgentInputLocalUiStateV1 | null) => void>(
         noopInputComposerRestoreTransientState,
     );
+    const annotationComposerInputRef = React.useRef<MultiTextInputHandle>(null);
+    const appendTranscriptAnnotation = React.useCallback((annotationBlock: string): boolean => {
+        if (
+            !surfaceFocused
+            || session.accessLevel === 'view'
+            || isEncryptedSessionLocked
+            || pendingMessageEditRef.current != null
+        ) {
+            return false;
+        }
+        setDraftValue((currentDraft) => appendTranscriptAnnotationToDraft(currentDraft, annotationBlock));
+        setTimeout(() => annotationComposerInputRef.current?.focus(), 0);
+        return true;
+    }, [isEncryptedSessionLocked, session.accessLevel, setDraftValue, surfaceFocused]);
     const {
         armedContinuationSubmission: liveArmedContinuationSubmission,
         clearArmedContinuationSubmissionIfCurrent: clearPersistedArmedContinuationSubmissionIfCurrent,
@@ -6438,6 +6458,7 @@ function SessionViewLoaded({
                 inputComposerClearTransientStateRef={inputComposerClearTransientStateRef}
                 inputComposerCaptureTransientStateRef={inputComposerCaptureTransientStateRef}
                 inputComposerRestoreTransientStateRef={inputComposerRestoreTransientStateRef}
+                agentInputRef={annotationComposerInputRef}
                 agentType={liveComposerState.agentId}
                 armedContinuationTarget={armedContinuationTarget}
                 composeAgentPickerOptions={inSessionAgentPicker.composeAgentPickerOptions}
@@ -6586,31 +6607,36 @@ function SessionViewLoaded({
                     paddingBottom: contentPaddingBottom,
                 }}
             >
-                <TranscriptMessageSelectionProvider
+                <TranscriptAnnotationProvider
                     sessionId={sessionId}
-                    eligibleMessageIdsInOrder={transcriptSelectionEligibleMessageIds}
-                    enabled={transcriptMessageSelectionEnabled === true && !isEncryptedSessionLocked}
+                    appendAnnotation={appendTranscriptAnnotation}
                 >
-                    <SessionViewedLifecycle
+                    <TranscriptMessageSelectionProvider
                         sessionId={sessionId}
-                        serverId={session.serverId ?? sessionRouteServerId}
-                        latestTurnStatus={session.latestTurnStatus}
-                        surfaceFocused={surfaceFocused}
-                    />
-                    <SessionTranscriptAgentContentView
-                        sessionId={sessionId}
-                        session={session}
-                        isEncryptedSessionLocked={isEncryptedSessionLocked}
-                        isForkedSessionV1={isForkedSessionV1}
-                        isLocallyAttached={isLocallyAttached}
-                        pendingMessagesCount={pendingMessages.length}
-                        hasDirectControlFooter={directControlFooter != null}
-                        content={content}
-                        input={inputWithTranscriptSelection}
-                        placeholder={placeholder}
-                        safeAreaBottom={agentContentSafeAreaBottom}
-                    />
-                </TranscriptMessageSelectionProvider>
+                        eligibleMessageIdsInOrder={transcriptSelectionEligibleMessageIds}
+                        enabled={transcriptMessageSelectionEnabled === true && !isEncryptedSessionLocked}
+                    >
+                        <SessionViewedLifecycle
+                            sessionId={sessionId}
+                            serverId={session.serverId ?? sessionRouteServerId}
+                            latestTurnStatus={session.latestTurnStatus}
+                            surfaceFocused={surfaceFocused}
+                        />
+                        <SessionTranscriptAgentContentView
+                            sessionId={sessionId}
+                            session={session}
+                            isEncryptedSessionLocked={isEncryptedSessionLocked}
+                            isForkedSessionV1={isForkedSessionV1}
+                            isLocallyAttached={isLocallyAttached}
+                            pendingMessagesCount={pendingMessages.length}
+                            hasDirectControlFooter={directControlFooter != null}
+                            content={content}
+                            input={inputWithTranscriptSelection}
+                            placeholder={placeholder}
+                            safeAreaBottom={agentContentSafeAreaBottom}
+                        />
+                    </TranscriptMessageSelectionProvider>
+                </TranscriptAnnotationProvider>
             </View >
 
             {/* Back button for landscape phone mode when header is hidden */}

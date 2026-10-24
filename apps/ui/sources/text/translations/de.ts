@@ -479,6 +479,23 @@ export const de: TranslationStructure = {
     },
 
     transcript: {
+        annotation: {
+            title: 'Nachricht annotieren',
+            actionA11y: 'Ausgewählten Nachrichtentext annotieren',
+            selectSource: 'Quelltext auswählen',
+            selectSourceHelp: 'Wähle eine zusammenhängende Passage und dann Auswahl verwenden.',
+            useSelection: 'Auswahl verwenden',
+            quotedSource: 'Zitierte Quelle — nur Kontext',
+            instructionLabel: 'Deine Anweisung',
+            instructionPlaceholder: 'Beschreibe die gewünschte Änderung...',
+            addToMessage: 'Zur Nachricht hinzufügen',
+            useCapturedText: 'Erfassten Text verwenden',
+            reselect: 'Neu auswählen',
+            sourceState: {
+                changed: 'Die Quellnachricht wurde geändert. Verwende den erfassten Text oder wähle neu aus.',
+                unavailable: 'Die Quellnachricht ist in dieser Sitzung nicht mehr verfügbar.',
+            },
+        },
         selection: {
             enterA11y: 'Auswahlmodus starten',
             exitA11y: 'Auswahlmodus beenden',

@@ -677,7 +677,24 @@ export const ru: TranslationStructure = {
     settings: "Настройки",
   },
 
-  transcript: {
+    transcript: {
+        annotation: {
+            title: 'Аннотировать сообщение',
+            actionA11y: 'Аннотировать выделенный текст сообщения',
+            selectSource: 'Выберите исходный текст',
+            selectSourceHelp: 'Выделите один непрерывный фрагмент и нажмите «Использовать выделение».',
+            useSelection: 'Использовать выделение',
+            quotedSource: 'Цитата из источника — только контекст',
+            instructionLabel: 'Ваша инструкция',
+            instructionPlaceholder: 'Опишите нужное изменение...',
+            addToMessage: 'Добавить в сообщение',
+            useCapturedText: 'Использовать сохранённый текст',
+            reselect: 'Выбрать заново',
+            sourceState: {
+                changed: 'Исходное сообщение изменилось. Используйте сохранённый текст или выберите заново.',
+                unavailable: 'Исходное сообщение больше недоступно в этом сеансе.',
+            },
+        },
 
     selection: {
 

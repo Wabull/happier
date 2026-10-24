@@ -662,7 +662,24 @@ export const es: TranslationStructure = {
     settings: "Configuración",
   },
 
-  transcript: {
+    transcript: {
+        annotation: {
+            title: 'Anotar mensaje',
+            actionA11y: 'Anotar el texto seleccionado del mensaje',
+            selectSource: 'Seleccionar texto de origen',
+            selectSourceHelp: 'Selecciona un pasaje continuo y elige Usar selección.',
+            useSelection: 'Usar selección',
+            quotedSource: 'Fuente citada — solo contexto',
+            instructionLabel: 'Tu instrucción',
+            instructionPlaceholder: 'Describe la actualización que quieres...',
+            addToMessage: 'Añadir al mensaje',
+            useCapturedText: 'Usar texto capturado',
+            reselect: 'Volver a seleccionar',
+            sourceState: {
+                changed: 'El mensaje de origen cambió. Usa el texto capturado o vuelve a seleccionar.',
+                unavailable: 'El mensaje de origen ya no está disponible en esta sesión.',
+            },
+        },
 
     selection: {
 
