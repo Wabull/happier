@@ -19,6 +19,6 @@ export function openTranscriptAnnotationModal(params: Readonly<{
             bodyScroll: 'auto',
             dimensions: { width: 620, maxHeightRatio: 0.92, size: 'md' },
         },
-        closeOnBackdrop: true,
+        closeOnBackdrop: false,
     });
 }

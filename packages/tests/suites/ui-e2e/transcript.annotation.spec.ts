@@ -18,10 +18,10 @@ import { spawnSessionFromDaemon } from '../../src/testkit/uiE2e/spawnSessionFrom
 
 const run = createRunDirs({ runLabel: 'ui-e2e' });
 
-async function selectSecondRepeat(page: Page, messageWrapper: ReturnType<Page['locator']>): Promise<void> {
+async function selectSecondRepeat(page: Page, messageWrapper: ReturnType<Page['locator']>): Promise<number> {
     const sourceRoot = messageWrapper.locator('[id^="transcript-annotation-content:"]').first();
     await expect(sourceRoot).toBeVisible();
-    await sourceRoot.evaluate((root) => {
+    return await sourceRoot.evaluate((root) => {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         const textNodes: Text[] = [];
         let rendered = '';
@@ -51,6 +51,19 @@ async function selectSecondRepeat(page: Page, messageWrapper: ReturnType<Page['l
         if (!selection) throw new Error('window selection unavailable');
         selection.removeAllRanges();
         selection.addRange(range);
+        return start;
+    });
+}
+
+async function hasProviderEntry(logPath: string, marker: string): Promise<boolean> {
+    const raw = await readFile(logPath, 'utf8').catch(() => '');
+    return raw.split('\n').some((line) => {
+        try {
+            const entry = JSON.parse(line);
+            return entry?.type === 'sdk_stdin' && String(entry?.userTextPreview ?? '').includes(marker);
+        } catch {
+            return false;
+        }
     });
 }
 
@@ -174,7 +187,7 @@ test.describe('ui e2e: transcript annotation', () => {
         await composer.fill(existingDraft);
         await initialDraftMutation;
         await sourceWrapper.hover();
-        await selectSecondRepeat(page, sourceWrapper);
+        const secondRepeatStart = await selectSecondRepeat(page, sourceWrapper);
         const annotate = sourceWrapper.locator('[data-testid^="transcript-message-annotate:"]').first();
         await expect(annotate).toBeVisible();
 
@@ -192,7 +205,10 @@ test.describe('ui e2e: transcript annotation', () => {
         await expect(page.getByTestId('transcript-annotation-modal')).toHaveCount(0);
         await expect(composer).toHaveValue(new RegExp(`^${existingDraft}\\n\\n## Transcript annotation`));
         await expect(composer).toHaveValue(/Quoted source — context only[\s\S]*repeat[\s\S]*My instruction[\s\S]*Use a more specific term here\./);
+        await expect(composer).toHaveValue(new RegExp(`Selection basis: rendered-text\nSelection range: ${secondRepeatStart}-${secondRepeatStart + 'repeat'.length}\n`));
         await expect(sourceWrapper).toContainText(sourcePrompt);
+        // Add only edits the draft: nothing reaches the provider before explicit Send.
+        expect(await hasProviderEntry(providerLogPath, '## Transcript annotation')).toBe(false);
         await page.screenshot({ path: testInfo.outputPath('annotation-composer.png'), fullPage: true });
 
         await page.reload({ waitUntil: 'domcontentloaded' });

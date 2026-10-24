@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import type { CustomModalInjectedProps } from '@/modal';
+import { useSessionMessagesById } from '@/sync/store/hooks';
 
 import { TranscriptAnnotationEditor, type TranscriptAnnotationSourceState } from './TranscriptAnnotationEditor';
 import {
@@ -17,6 +18,9 @@ export type TranscriptAnnotationModalProps = CustomModalInjectedProps & Readonly
 
 export function TranscriptAnnotationModal(props: TranscriptAnnotationModalProps) {
     useTranscriptAnnotationComposerRevision();
+    // Re-render on source-session message updates so a change after capture
+    // surfaces the captured-vs-reselect choice before Add.
+    useSessionMessagesById(props.source.sessionId);
     const controller = getTranscriptAnnotationComposer(props.source.sessionId);
     let sourceState: TranscriptAnnotationSourceState;
     if (!controller) {
