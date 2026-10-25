@@ -219,27 +219,34 @@ test.describe('ui e2e: transcript annotation', () => {
         await assistantAnnotate.click();
         const sourcePicker = page.getByTestId('transcript-annotation-source-input');
         await expect(sourcePicker).toHaveValue(assistantText);
-        // Diagnostic only: record whether keyboard selection in the read-only picker reaches the editor.
+        // Keyboard: the read-only picker starts from a collapsed caret; Shift+ArrowRight selects forward.
         await sourcePicker.focus();
-        await sourcePicker.press('Control+Home');
         for (let index = 0; index < 'FAKE_CLAUDE'.length; index += 1) await sourcePicker.press('Shift+ArrowRight');
-        const keyboardSelection = await sourcePicker.evaluate((element) => {
+        await expect.poll(() => sourcePicker.evaluate((element) => {
             const input = element as HTMLTextAreaElement;
-            return { start: input.selectionStart, end: input.selectionEnd };
-        });
-        const useSelection = page.getByTestId('transcript-annotation-use-selection');
-        console.log(`[annotation-e2e] keyboard-source-selection ${JSON.stringify({ ...keyboardSelection, useSelectionEnabled: await useSelection.isEnabled() })}`);
-        // Mouse gesture: double-click selects the single marker word, i.e. the whole assistant text.
-        await sourcePicker.dblclick();
+            return [input.selectionStart, input.selectionEnd];
+        })).toEqual([0, 'FAKE_CLAUDE'.length]);
         await expect(sourcePicker).toHaveValue(assistantText);
+        const useSelection = page.getByTestId('transcript-annotation-use-selection');
+        await expect(useSelection).toBeEnabled();
         await useSelection.click();
-        await expect(page.getByTestId('transcript-annotation-quote-preview')).toHaveText(assistantText);
+        await expect(page.getByTestId('transcript-annotation-quote-preview')).toHaveText('FAKE_CLAUDE');
         await page.getByTestId('transcript-annotation-note-input').fill('Name the assistant marker.');
         await page.getByTestId('transcript-annotation-add').click();
         await expect(page.getByTestId('transcript-annotation-modal')).toHaveCount(0);
-        await expect(composer).toHaveValue(new RegExp(`Source role: assistant[\\s\\S]*Selection basis: source-editor\\nSelection range: 0-${assistantText.length}\\n[\\s\\S]*\\n${assistantText}\\n[\\s\\S]*Name the assistant marker\\.$`));
+        await expect(composer).toHaveValue(/Source role: assistant[\s\S]*Selection basis: source-editor\nSelection range: 0-11\n[\s\S]*\nFAKE_CLAUDE\n[\s\S]*Name the assistant marker\.$/);
         await expect(composer).toHaveValue(new RegExp(`^${existingDraft}\n\n## Transcript annotation`));
         expect(await hasProviderEntry(providerLogPath, '## Transcript annotation')).toBe(false);
+
+        // Mouse selection in the picker still works; Cancel leaves the draft unchanged.
+        const draftBeforeMouseCheck = await composer.inputValue();
+        await assistantWrapper.hover();
+        await assistantAnnotate.click();
+        await sourcePicker.dblclick();
+        await expect(page.getByTestId('transcript-annotation-use-selection')).toBeEnabled();
+        await page.getByTestId('transcript-annotation-cancel').click();
+        await expect(page.getByTestId('transcript-annotation-modal')).toHaveCount(0);
+        await expect(composer).toHaveValue(draftBeforeMouseCheck);
         await page.screenshot({ path: testInfo.outputPath('annotation-composer.png'), fullPage: true });
 
         await page.reload({ waitUntil: 'domcontentloaded' });

@@ -36,6 +36,7 @@ describe('TranscriptAnnotationEditor native source selection', () => {
         const sourceInput = screen.findByProps({ testID: 'transcript-annotation-source-input' });
         expect(sourceInput.props.value).toBe('first repeat \ud83d\ude00 second repeat');
         expect(sourceInput.props.editable).toBe(false);
+        expect(sourceInput.props.onKeyPress).toBeUndefined();
 
         await act(async () => {
             sourceInput.props.onSelectionChange({ nativeEvent: { selection: { start: 23, end: 29 } } });

@@ -97,6 +97,42 @@ export function buildTranscriptAnnotationBlock(params: Readonly<{
     ].join('\n');
 }
 
+function isSurrogatePairAt(text: string, index: number): boolean {
+    if (index < 0 || index + 1 >= text.length) return false;
+    const high = text.charCodeAt(index);
+    const low = text.charCodeAt(index + 1);
+    return high >= 0xd800 && high <= 0xdbff && low >= 0xdc00 && low <= 0xdfff;
+}
+
+export type ReadOnlySourceCaretRange = Readonly<{
+    start: number;
+    end: number;
+    direction: 'forward' | 'backward' | 'none';
+}>;
+
+// Browser read-only textareas have no keyboard caret: arrow keys do not move a
+// collapsed selection, but they do extend an existing range natively. Step only
+// the collapsed case so keyboard selection can start; return null otherwise.
+export function stepReadOnlySourceCaret(
+    text: string,
+    selection: Readonly<{ start: number; end: number }>,
+    key: Readonly<{ key: string; shiftKey: boolean }>,
+): ReadOnlySourceCaretRange | null {
+    if (selection.start !== selection.end) return null;
+    const caret = selection.start;
+    if (key.key === 'ArrowRight') {
+        if (caret >= text.length) return null;
+        const next = caret + (isSurrogatePairAt(text, caret) ? 2 : 1);
+        return key.shiftKey ? { start: caret, end: next, direction: 'forward' } : { start: next, end: next, direction: 'none' };
+    }
+    if (key.key === 'ArrowLeft') {
+        if (caret <= 0) return null;
+        const next = caret - (isSurrogatePairAt(text, caret - 2) ? 2 : 1);
+        return key.shiftKey ? { start: next, end: caret, direction: 'backward' } : { start: next, end: next, direction: 'none' };
+    }
+    return null;
+}
+
 export type TranscriptAnnotationAppendRefusal = 'inactive' | 'viewOnly' | 'locked' | 'editingQueuedMessage';
 
 export type TranscriptAnnotationAppendResult =

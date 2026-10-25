@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View, type NativeSyntheticEvent, type TextInputKeyPressEventData } from 'react-native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 
 import { Text, TextInput } from '@/components/ui/text/Text';
@@ -7,6 +7,7 @@ import { t } from '@/text';
 
 import {
     isTranscriptAnnotationSelectionValid,
+    stepReadOnlySourceCaret,
     type TranscriptAnnotationAppendRefusal,
     type TranscriptAnnotationAppendResult,
     type TranscriptAnnotationSelection,
@@ -72,6 +73,39 @@ const styles = StyleSheet.create((theme) => ({
     buttonText: { color: theme.colors.text.primary, fontSize: 13 },
     primaryText: { color: theme.colors.text.link, fontWeight: '600' },
 }));
+
+// Web only: react-native-web hands onKeyPress the DOM keydown event, whose target
+// is the read-only textarea. Seed the collapsed caret so keyboard selection can
+// begin; the browser extends any existing range natively and reports it through
+// onSelectionChange. The source value is never edited.
+function handleReadOnlySourceKeyPress(sourceText: string, event: NativeSyntheticEvent<TextInputKeyPressEventData>): void {
+    const keyEvent = event as unknown as Readonly<{
+        key?: unknown;
+        shiftKey?: unknown;
+        ctrlKey?: unknown;
+        metaKey?: unknown;
+        altKey?: unknown;
+        target?: unknown;
+        preventDefault: () => void;
+    }>;
+    const target = keyEvent.target as Partial<HTMLTextAreaElement> | null | undefined;
+    if (
+        typeof keyEvent.key !== 'string'
+        || keyEvent.ctrlKey === true || keyEvent.metaKey === true || keyEvent.altKey === true
+        || !target || typeof target.setSelectionRange !== 'function'
+        || typeof target.selectionStart !== 'number' || typeof target.selectionEnd !== 'number'
+    ) {
+        return;
+    }
+    const next = stepReadOnlySourceCaret(
+        sourceText,
+        { start: target.selectionStart, end: target.selectionEnd },
+        { key: keyEvent.key, shiftKey: keyEvent.shiftKey === true },
+    );
+    if (!next) return;
+    keyEvent.preventDefault();
+    target.setSelectionRange(next.start, next.end, next.direction);
+}
 
 function EditorButton(props: Readonly<{
     title: string;
@@ -192,6 +226,9 @@ export function TranscriptAnnotationEditor(props: TranscriptAnnotationEditorProp
                         editable={false}
                         contextMenuHidden={false}
                         value={props.sourceText}
+                        onKeyPress={Platform.OS === 'web'
+                            ? (event) => handleReadOnlySourceKeyPress(props.sourceText, event)
+                            : undefined}
                         onSelectionChange={(event) => {
                             const next = event.nativeEvent.selection;
                             const candidate: TranscriptAnnotationSelection = {

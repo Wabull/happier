@@ -6,6 +6,7 @@ import {
     isTranscriptAnnotationSelectionValid,
     isTranscriptAnnotationSourceCurrent,
     resolveTranscriptAnnotationAppendRefusal,
+    stepReadOnlySourceCaret,
 } from './transcriptAnnotationModel';
 
 describe('transcriptAnnotationModel', () => {
@@ -75,5 +76,20 @@ describe('transcriptAnnotationModel', () => {
         expect(resolveTranscriptAnnotationAppendRefusal({ ...allowed, viewOnly: true })).toBe('viewOnly');
         expect(resolveTranscriptAnnotationAppendRefusal({ ...allowed, encryptedSessionLocked: true })).toBe('locked');
         expect(resolveTranscriptAnnotationAppendRefusal({ ...allowed, pendingMessageEditActive: true })).toBe('editingQueuedMessage');
+    });
+
+    it('moves and seeds a collapsed read-only caret by whole code points', () => {
+        const text = 'ab\ud83d\ude00c';
+        expect(stepReadOnlySourceCaret(text, { start: 1, end: 1 }, { key: 'ArrowRight', shiftKey: false }))
+            .toEqual({ start: 2, end: 2, direction: 'none' });
+        expect(stepReadOnlySourceCaret(text, { start: 2, end: 2 }, { key: 'ArrowRight', shiftKey: true }))
+            .toEqual({ start: 2, end: 4, direction: 'forward' });
+        expect(stepReadOnlySourceCaret(text, { start: 4, end: 4 }, { key: 'ArrowLeft', shiftKey: true }))
+            .toEqual({ start: 2, end: 4, direction: 'backward' });
+        expect(stepReadOnlySourceCaret(text, { start: 0, end: 0 }, { key: 'ArrowLeft', shiftKey: false })).toBeNull();
+        expect(stepReadOnlySourceCaret(text, { start: 5, end: 5 }, { key: 'ArrowRight', shiftKey: true })).toBeNull();
+        // An existing range is extended natively by the browser; leave it alone.
+        expect(stepReadOnlySourceCaret(text, { start: 0, end: 2 }, { key: 'ArrowRight', shiftKey: true })).toBeNull();
+        expect(stepReadOnlySourceCaret(text, { start: 1, end: 1 }, { key: 'a', shiftKey: false })).toBeNull();
     });
 });
