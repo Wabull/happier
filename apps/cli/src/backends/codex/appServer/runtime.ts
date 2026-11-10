@@ -652,6 +652,21 @@ function didHappierTitleToolSucceed(output: unknown, depth = 0): boolean {
     return readMcpContentTextPayloads(record).some((payload) => didHappierTitleToolSucceed(payload, depth + 1));
 }
 
+function readCommittedCurrentSessionTitleActionResult(output: unknown, sessionId: string, depth = 0): string | null {
+    if (depth > 2 || !trimStringValue(sessionId)) return null;
+    const record = readRecord(output);
+    if (!record || record.isError === true || record.ok === false) return null;
+    const result = readRecord(record.result);
+    if (record.ok === true && result?.ok === true && result.sessionId === sessionId) {
+        return trimStringValue(result.title);
+    }
+    for (const payload of readMcpContentTextPayloads(record)) {
+        const title = readCommittedCurrentSessionTitleActionResult(payload, sessionId, depth + 1);
+        if (title) return title;
+    }
+    return null;
+}
+
 function readRollbackUnsupportedErrorMessage(error: unknown): string | null {
     if (!(error instanceof Error)) return null;
     const message = error.message.trim();
@@ -1637,7 +1652,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
         stopActiveTurnPendingPump();
         publishInFlightSteerAvailabilityIfChanged();
     };
-    const pendingHappierTitleToolNamesByCallId = new Map<string, string>();
+    const pendingHappierTitleToolsByCallId = new Map<string, { kind: 'direct'; title: string } | { kind: 'action' }>();
     const syntheticSubagentThreadIds = new Set<string>();
     const syntheticSubagentTracker = createCodexSyntheticSubagentTracker({
         session: params.session,
@@ -2582,8 +2597,12 @@ export function createCodexAppServerRuntime(params: Readonly<{
             if (update.toolKind === 'mcp' && isChangeTitleToolNameAlias(update.name)) {
                 const title = readHappierTitleToolTitle(update.input);
                 if (title) {
-                    pendingHappierTitleToolNamesByCallId.set(update.callId, title);
+                    pendingHappierTitleToolsByCallId.set(update.callId, { kind: 'direct', title });
                 }
+            } else if (update.toolKind === 'mcp'
+                && canonicalizeCodexMcpToolName(update.name) === 'mcp__happier__action_execute'
+                && readRecord(update.input)?.actionId === 'session.title.set') {
+                pendingHappierTitleToolsByCallId.set(update.callId, { kind: 'action' });
             }
             if (update.toolKind === 'file-change') {
                 const input = update.input && typeof update.input === 'object' && !Array.isArray(update.input)
@@ -2620,8 +2639,11 @@ export function createCodexAppServerRuntime(params: Readonly<{
         }
 
         if (update.type === 'tool-result') {
-            const completedTitleName = pendingHappierTitleToolNamesByCallId.get(update.callId) ?? null;
-            pendingHappierTitleToolNamesByCallId.delete(update.callId);
+            const completedTitleTool = pendingHappierTitleToolsByCallId.get(update.callId);
+            pendingHappierTitleToolsByCallId.delete(update.callId);
+            const completedTitleName = completedTitleTool?.kind === 'action'
+                ? readCommittedCurrentSessionTitleActionResult(update.output, params.session.sessionId)
+                : completedTitleTool && didHappierTitleToolSucceed(update.output) ? completedTitleTool.title : null;
             if (context.sidechainId) {
                 params.session.sendAgentMessage('codex', {
                     type: 'tool-call-result',
@@ -2638,7 +2660,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
                     id: randomUUID(),
                 });
             }
-            if (completedTitleName && didHappierTitleToolSucceed(update.output) && threadId && !context.sidechainId) {
+            if (completedTitleName && threadId && !context.sidechainId) {
                 try {
                     const client = await ensureClient();
                     await client.request('thread/name/set', { threadId, name: completedTitleName });
@@ -2660,7 +2682,7 @@ export function createCodexAppServerRuntime(params: Readonly<{
         handledAsyncQuestionItemKeys.clear();
         nativeReviewCompletionTextByStreamScope.clear();
         rawAssistantFinalByItemKey.clear();
-        pendingHappierTitleToolNamesByCallId.clear();
+        pendingHappierTitleToolsByCallId.clear();
         await itemTranscriptBridge.flushAll({
             reason,
             ...(reason === 'abort' ? { interruptedReason: 'app-server-turn-interrupted' } : {}),

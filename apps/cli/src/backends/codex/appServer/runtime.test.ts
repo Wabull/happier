@@ -848,6 +848,19 @@ async function writeFakeCodexAppServerScript(params: Readonly<{
         '            }, 20);',
         '            continue;',
         '        }',
+        '        if (text.startsWith("bridge-mcp-title-action:")) {',
+        '            const scenario = JSON.parse(text.slice("bridge-mcp-title-action:".length));',
+        '            setTimeout(() => {',
+        '                process.stdout.write(JSON.stringify({ method: "item/started", params: { threadId: scenario.sidechain ? "thread-child" : msg.params?.threadId, ...(scenario.sidechain ? { turnId: "turn-child" } : {}), item: { id: "mcp_title_action", type: "mcpToolCall", server: scenario.server ?? "happier", tool: scenario.tool ?? "action_execute", arguments: { actionId: scenario.actionId ?? "session.title.set", input: scenario.input } } } }) + "\\n");',
+        '            }, 6);',
+        '            setTimeout(() => {',
+        '                process.stdout.write(JSON.stringify({ method: "item/completed", params: { threadId: scenario.sidechain ? "thread-child" : msg.params?.threadId, ...(scenario.sidechain ? { turnId: "turn-child" } : {}), item: { id: "mcp_title_action", type: "mcpToolCall", result: { Ok: { content: [{ type: "text", text: JSON.stringify(scenario.result) }], isError: scenario.isError === true } } } } }) + "\\n");',
+        '            }, 10);',
+        '            setTimeout(() => {',
+        '                process.stdout.write(JSON.stringify({ method: "turn/completed", params: { threadId: msg.params?.threadId, turn: { id: turnId } } }) + "\\n");',
+        '            }, 20);',
+        '            continue;',
+        '        }',
         '        if (text === "bridge-mcp-title-tool-completed") {',
         '            setTimeout(() => {',
         '                process.stdout.write(JSON.stringify({ method: "item/started", params: { item: { id: "mcp_title_1", type: "mcpToolCall", server: "happier", tool: "change_title", arguments: { title: "New Title" } } } }) + "\\n");',
@@ -7509,6 +7522,64 @@ describe('createCodexAppServerRuntime', () => {
             'mcp__happier__change_title',
             { title: 'New Title' },
         );
+    });
+
+    it.each(['omitted', 'current', 'resolved-current-prefix'])('syncs the committed current-session title action result to its native thread (%s target)', async (target) => {
+        const { root, requestLogPath } = await createRuntimeFixture('happier-codex-title-action-');
+        const sendCodexMessage = vi.fn();
+        const session = createMutableApiSessionClientFixture({ metadata: createRuntimeMetadata(root), overrides: { sendCodexMessage } });
+        const runtime = createCodexAppServerRuntime({ directory: root, session, onThinkingChange: vi.fn() });
+        try {
+            await runtime.startOrLoad({});
+            await runtime.sendPrompt(`bridge-mcp-title-action:${JSON.stringify({
+                input: { title: 'Requested title', ...(target === 'omitted' ? {} : { sessionId: target === 'current' ? session.sessionId : session.sessionId.slice(0, 8) }) },
+                result: { ok: true, result: { ok: true, sessionId: session.sessionId, title: '  Committed title  ' } },
+            })}`);
+            expect(sendCodexMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'tool-call-result', callId: 'mcp_title_action' }));
+            const requests = await readRequestLog(requestLogPath);
+            expect(requests.filter(entry => entry.method === 'thread/name/set')).toEqual([
+                expect.objectContaining({ params: { threadId: 'thread-started', name: 'Committed title' } }),
+            ]);
+        } finally {
+            await runtime.reset();
+        }
+    });
+
+    it.each([
+        ['foreign target', (id: string) => ({ input: { sessionId: 'foreign-session', title: 'Requested title' }, result: { ok: true, result: { ok: true, sessionId: 'foreign-session', title: 'Other title' } } })],
+        ['resolved foreign prefix', (id: string) => ({ input: { sessionId: 'foreign', title: 'Requested title' }, result: { ok: true, result: { ok: true, sessionId: 'foreign-session', title: 'Other title' } } })],
+        ['nested business failure', (id: string) => ({ result: { ok: true, result: { ok: false, sessionId: id, title: 'Rejected title' } } })],
+        ['outer failure', (id: string) => ({ result: { ok: false, result: { ok: true, sessionId: id, title: 'Rejected title' } } })],
+        ['missing resolved ID', () => ({ result: { ok: true, result: { ok: true, title: 'Unattributed title' } } })],
+        ['blank committed title', (id: string) => ({ result: { ok: true, result: { ok: true, sessionId: id, title: '   ' } } })],
+        ['MCP error', (id: string) => ({ isError: true, result: { ok: true, result: { ok: true, sessionId: id, title: 'Rejected title' } } })],
+        ['unrelated action', (id: string) => ({ actionId: 'session.stop', result: { ok: true, result: { ok: true, sessionId: id, title: 'Not a title action' } } })],
+        ['foreign MCP server', (id: string) => ({ server: 'other', result: { ok: true, result: { ok: true, sessionId: id, title: 'Untrusted tool' } } })],
+        ['sidechain', (id: string) => ({ sidechain: true, result: { ok: true, result: { ok: true, sessionId: id, title: 'Child title' } } })],
+    ] as const)('does not sync a title action with %s to the caller native thread', async (_label, buildScenario) => {
+        const { root, requestLogPath } = await createRuntimeFixture('happier-codex-title-action-refusal-');
+        const sendCodexMessage = vi.fn();
+        const sendAgentMessage = vi.fn();
+        const session = createMutableApiSessionClientFixture({ metadata: createRuntimeMetadata(root), overrides: { sendCodexMessage, sendAgentMessage } });
+        const runtime = createCodexAppServerRuntime({ directory: root, session, onThinkingChange: vi.fn() });
+        const scenario: { input: Record<string, unknown>; result: unknown; sidechain?: boolean } = {
+            input: { title: 'Requested title' }, ...buildScenario(session.sessionId),
+        };
+        try {
+            await runtime.startOrLoad({});
+            await runtime.sendPrompt(`bridge-mcp-title-action:${JSON.stringify(scenario)}`);
+            if (scenario.sidechain) {
+                expect(sendAgentMessage).toHaveBeenCalledWith('codex', expect.objectContaining({
+                    type: 'tool-call-result', callId: 'mcp_title_action', sidechainId: JSON.stringify(['thread-child', 'turn-child']),
+                }));
+            } else {
+                expect(sendCodexMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'tool-call-result', callId: 'mcp_title_action' }));
+            }
+            const requests = await readRequestLog(requestLogPath);
+            expect(requests.filter(entry => entry.method === 'thread/name/set')).toEqual([]);
+        } finally {
+            await runtime.reset();
+        }
     });
 
     it('syncs completed Happier title tool calls to the Codex native thread name', async () => {
